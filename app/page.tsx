@@ -1,69 +1,93 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import type { Lang } from "@/lib/i18n";
+import { Onboarding } from "@/components/Onboarding";
+import { ReceiptTab } from "@/components/ReceiptTab";
+import { RiskTab } from "@/components/RiskTab";
+
+type Tab = "receipt" | "risk";
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+  const [mounted, setMounted] = useState(false);
+  const [ack, setAck] = useState(false);
+  const [tab, setTab] = useState<Tab>("receipt");
+
+  useEffect(() => {
+    try {
+      setAck(window.localStorage.getItem("ack_v1") === "true");
+    } catch {}
+    setMounted(true);
+  }, []);
+
+  const accept = (lang: Lang) => {
+    try {
+      window.localStorage.setItem("lang", lang);
+      window.localStorage.setItem("ack_v1", "true");
+    } catch {}
+    setAck(true);
+  };
+
+  if (!mounted) {
+    return <main className="app-shell" />;
+  }
+
+  if (!ack) {
+    return (
+      <main className="app-shell">
+        <Onboarding onAccept={accept} />
       </main>
-    </div>
+    );
+  }
+
+  return (
+    <main className="app-shell">
+      <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+        {tab === "receipt" ? <ReceiptTab /> : <RiskTab />}
+      </div>
+      <TabBar tab={tab} onChange={setTab} />
+    </main>
+  );
+}
+
+function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+  const items: { id: Tab; label: string; icon: string }[] = [
+    { id: "receipt", label: "Receipt", icon: "🧾" },
+    { id: "risk", label: "US Risk", icon: "%" },
+  ];
+  return (
+    <nav
+      style={{
+        position: "sticky",
+        bottom: 0,
+        display: "flex",
+        borderTop: "1px solid rgba(255,255,255,0.12)",
+        background: "rgba(10,46,51,0.92)",
+        backdropFilter: "blur(8px)",
+        paddingBottom: "env(safe-area-inset-bottom)",
+      }}
+    >
+      {items.map((it) => {
+        const active = it.id === tab;
+        return (
+          <button
+            key={it.id}
+            onClick={() => onChange(it.id)}
+            style={{
+              flex: 1,
+              padding: "10px 0 12px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 2,
+              color: active ? "var(--rc-orange)" : "rgba(255,255,255,0.6)",
+            }}
+          >
+            <span style={{ fontSize: 18, fontWeight: 700 }}>{it.icon}</span>
+            <span style={{ fontSize: 10, fontWeight: 600 }}>{it.label}</span>
+          </button>
+        );
+      })}
+    </nav>
   );
 }
