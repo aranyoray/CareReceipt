@@ -5,8 +5,9 @@ import type { Lang } from "@/lib/i18n";
 import { Onboarding } from "@/components/Onboarding";
 import { ReceiptTab } from "@/components/ReceiptTab";
 import { RiskTab } from "@/components/RiskTab";
+import { BillTab } from "@/components/BillTab";
 
-type Tab = "receipt" | "risk";
+type Tab = "receipt" | "risk" | "bill";
 
 export default function Home() {
   const [mounted, setMounted] = useState(false);
@@ -43,7 +44,7 @@ export default function Home() {
   return (
     <main className="app-shell">
       <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-        {tab === "receipt" ? <ReceiptTab /> : <RiskTab />}
+        {tab === "receipt" ? <ReceiptTab /> : tab === "risk" ? <RiskTab /> : <BillTab />}
       </div>
       <TabBar tab={tab} onChange={setTab} />
     </main>
@@ -54,6 +55,7 @@ function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
   const items: { id: Tab; label: string; icon: string }[] = [
     { id: "receipt", label: "Receipt", icon: "🧾" },
     { id: "risk", label: "US Risk", icon: "%" },
+    { id: "bill", label: "Bill", icon: "$" },
   ];
   return (
     <nav
