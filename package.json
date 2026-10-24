@@ -1,0 +1,12 @@
+{
+  "name": "receipt-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev:care": "npm run dev -w carereceipt",
+    "dev:relief": "npm run dev -w reliefreceipt",
+    "build": "npm run build -w carereceipt && npm run build -w reliefreceipt",
+    "typecheck": "tsc -p apps/carereceipt --noEmit && tsc -p apps/reliefreceipt --noEmit"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "@receipt/ui",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.tsx",
+  "types": "./src/index.tsx",
+  "exports": { ".": "./src/index.tsx", "./Shell": "./src/Shell.tsx", "./tokens.css": "./src/tokens.css" }
+}
