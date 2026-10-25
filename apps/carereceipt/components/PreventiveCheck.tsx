@@ -2,44 +2,59 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  type County,
+  type ExpectedValue,
   type ExposureRow,
-  type Geo,
   type Level,
+  type RiskCell,
   type RiskDB,
   LEVEL_LABEL,
-  countyForZip,
+  annualEquivalent,
   exposomeFor,
-  loadGeo,
+  expectedValue,
   loadRiskDB,
-  loadZipMap,
-  nationalBaseline,
+  nationalIndex,
   per100,
   profileKey,
   shortName,
+  sumExpected,
+  yearsAtRisk,
 } from "@receipt/core";
 import {
   Badge,
   Card,
-  Chips,
   Divider,
   Empty,
   Eyebrow,
-  Field,
   Fine,
   H1,
-  H2,
+  Hero,
+  IconChart,
+  IconPin,
   Lede,
-  LineItem,
+  ListRow,
+  Meter,
+  MultiPicker,
   Note,
+  NumberField,
+  Picker,
   Rail,
+  Ring,
+  SectionHead,
+  Segmented,
+  Skeleton,
   Split,
   Stack,
   Stat,
   StatRow,
-  usdShort,
   useStored,
+  useStoredList,
+  usd,
+  usdShort,
 } from "@receipt/ui";
+import { useApp } from "./AppState";
+
+/** The ring has no informational step, so a typical reading uses the series hue. */
+const ringTone = (t: "ok" | "info" | "warn" | "danger") => (t === "info" ? "s1" : t);
 
 const TONE: Record<Level, "ok" | "info" | "warn" | "danger"> = {
   low: "ok",
@@ -50,54 +65,387 @@ const TONE: Record<Level, "ok" | "info" | "warn" | "danger"> = {
   severe: "danger",
 };
 
+interface Risk {
+  id: string;
+  cell: RiskCell;
+  /** Set when the figure is conditional on something already diagnosed. */
+  given?: string;
+  diagnosed: boolean;
+  ev: ExpectedValue | null;
+}
+
 /**
- * Risk Receipt and The Exposome were two separate tabs in Billculate. They
- * answer halves of one question — what is likely to go wrong for someone like
- * you, and what where you live adds on top — so they are one feature here.
+ * Risk Receipt and The Exposome were separate tabs in Billculate. They answer
+ * halves of one question — what is likely to go wrong for someone like you,
+ * and what living where you live adds on top — so they are one feature here,
+ * with the dollar figure both of them produce reported per year.
  */
 export function PreventiveCheck() {
+  const { zip, setZip, county } = useApp();
   const [db, setDb] = useState<RiskDB | null>(null);
-  const [geo, setGeo] = useState<Geo | null>(null);
-  const [zipMap, setZipMap] = useState<Record<string, string> | null>(null);
-  const [zip, setZip] = useStored("zip", "");
   const [ageId, setAgeId] = useStored("pc_age", "35_44");
-  const [raceId, setRaceId] = useStored("pc_race", "all");
-  const [sexId, setSexId] = useStored("pc_sex", "all");
+  const [raceId, setRaceId] = useStored("pc_race", "");
+  const [sexId, setSexId] = useStored("pc_sex", "");
+  const [diagnosed, setDiagnosed] = useStoredList("pc_diagnosed");
+  const [pane, setPane] = useState("likely");
 
   useEffect(() => {
     loadRiskDB().then(setDb);
-    Promise.all([loadGeo(), loadZipMap()]).then(([g, z]) => {
-      setGeo(g);
-      setZipMap(z);
-    });
   }, []);
 
-  const county: County | null = useMemo(() => {
-    if (!geo || !zipMap || zip.length < 5) return null;
-    return countyForZip(geo, zipMap, zip);
-  }, [geo, zipMap, zip]);
+  // Every profile in the reference is one age band, one race group and one
+  // sex: there is no pooled row to fall back on. The age band has a sensible
+  // default, but guessing a sex or a race group would put figures on screen
+  // that belong to somebody else, so those stay empty until they are chosen.
+  // A value left over from an older visit that is no longer an option is
+  // cleared rather than silently substituted.
+  useEffect(() => {
+    if (!db) return;
+    if (!db.age_groups.some((g) => g.id === ageId)) setAgeId(db.age_groups[0].id);
+    if (sexId && !db.sex_groups.some((g) => g.id === sexId)) setSexId("");
+    if (raceId && !db.race_groups.some((g) => g.id === raceId)) setRaceId("");
+  }, [db, ageId, sexId, raceId, setAgeId, setSexId, setRaceId]);
 
-  const profile = db ? db.profiles[profileKey(ageId, raceId, sexId)] : undefined;
+  const profileChosen = Boolean(sexId && raceId);
 
-  const topRisks = useMemo(() => {
+  const profile =
+    db && sexId && raceId ? db.profiles[profileKey(ageId, raceId, sexId)] : undefined;
+  const years = yearsAtRisk(ageId);
+
+  /**
+   * One row per condition on the receipt.
+   *
+   * With nothing diagnosed the figure is the plain prevalence for this
+   * profile. With something diagnosed, a condition that has a conditional cell
+   * for it uses that instead, and the strongest single association is the one
+   * shown: these are one-condition-at-a-time figures from the survey, so
+   * stacking several of them would overstate the result.
+   */
+  const risks: Risk[] = useMemo(() => {
     if (!db || !profile) return [];
+
     return db.receipt_conditions
-      .map((id) => ({ id, cell: profile.baseline[id] }))
-      .filter((r) => r.cell && typeof r.cell.pct === "number")
-      .sort((a, b) => (b.cell!.pct ?? 0) - (a.cell!.pct ?? 0))
-      .slice(0, 8);
-  }, [db, profile]);
+      .map((id): Risk | null => {
+        const isDiagnosed = diagnosed.includes(id);
+        const base = profile.baseline[id];
+
+        let cell = base;
+        let given: string | undefined;
+
+        if (!isDiagnosed) {
+          for (const d of diagnosed) {
+            const conditional = profile.given?.[d]?.[id];
+            if (conditional && typeof conditional.pct === "number") {
+              if (!given || (conditional.pct ?? 0) > (cell?.pct ?? 0)) {
+                cell = conditional;
+                given = d;
+              }
+            }
+          }
+        }
+
+        if (!cell || typeof cell.pct !== "number") return null;
+
+        return {
+          id,
+          cell,
+          given,
+          diagnosed: isDiagnosed,
+          ev: expectedValue(id, ageId, cell.pct, cell.lo, cell.hi, isDiagnosed),
+        };
+      })
+      .filter((r): r is Risk => r !== null)
+      .sort((a, b) => (b.ev?.typical ?? 0) - (a.ev?.typical ?? 0));
+  }, [db, profile, diagnosed, ageId]);
+
+  const totals = useMemo(
+    () => sumExpected(risks.map((r) => r.ev).filter((e): e is ExpectedValue => e !== null)),
+    [risks],
+  );
+
+  const likely = useMemo(
+    () => risks.filter((r) => !r.diagnosed).sort((a, b) => (b.cell.pct ?? 0) - (a.cell.pct ?? 0)).slice(0, 7),
+    [risks],
+  );
+  const carried = risks.filter((r) => r.diagnosed);
+  const topPct = likely.length ? (likely[0].cell.pct ?? 1) : 1;
 
   const exposome = county ? exposomeFor(county, ageId) : null;
-  const national = nationalBaseline(ageId);
+  const nationalIdx = nationalIndex();
+
+  const conditionOptions = useMemo(() => {
+    if (!db) return [];
+    const ids = db.preexisting.length ? db.preexisting : db.receipt_conditions;
+    // The reference labels carry their survey definition, which is far too
+    // long for a line in a list.
+    return ids.map((id) => ({ id, label: shortName(id) }));
+  }, [db]);
+
+  // Something diagnosed that the cost model does not cover still does useful
+  // work: it conditions the rates of everything else.
+  const conditioningOnly = useMemo(
+    () => (db ? diagnosed.filter((id) => !db.receipt_conditions.includes(id)) : []),
+    [db, diagnosed],
+  );
+
+  const perYear = (v: number) => annualEquivalent(v, years);
 
   if (!db) {
     return (
-      <Card>
-        <Empty>Loading the reference data…</Empty>
-      </Card>
+      <Stack>
+        <Card>
+          <Stack tight>
+            <Skeleton h={18} w="55%" />
+            <Skeleton h={12} w="80%" />
+            <Skeleton h={120} />
+          </Stack>
+        </Card>
+      </Stack>
     );
   }
+
+  const controls = (
+    <Card>
+      <Stack tight>
+        <Picker label="Age" options={db.age_groups} value={ageId} onChange={setAgeId} />
+        <Picker label="Sex" options={db.sex_groups} value={sexId} onChange={setSexId} />
+        <Picker
+          label="Race and ethnicity"
+          options={db.race_groups}
+          value={raceId}
+          onChange={setRaceId}
+          hint="Reported population statistics, not biology."
+        />
+        <MultiPicker
+          label="Already diagnosed"
+          options={conditionOptions}
+          value={diagnosed}
+          onChange={setDiagnosed}
+          placeholder="Nothing selected"
+          hint="Anything selected is counted as certain rather than likely, and the other conditions are shown at their rate among people who have it."
+        />
+        <Divider />
+        <NumberField
+          label="ZIP code"
+          value={zip}
+          onChange={setZip}
+          maxLength={5}
+          placeholder="e.g. 10001"
+          hint={county ? `${county.name}, ${county.stateName}` : "Adds the local exposure picture"}
+        />
+        <Fine>
+          Population statistics describe groups, not individuals. Nothing here is a prediction about
+          you, and none of it leaves this browser.
+        </Fine>
+      </Stack>
+    </Card>
+  );
+
+  const results = (
+    <>
+      <Card raised>
+        <Stack>
+          <Segmented
+            options={[
+              { id: "likely", label: "Most likely" },
+              { id: "burden", label: "What it costs" },
+            ]}
+            value={pane}
+            onChange={setPane}
+          />
+
+          {!profileChosen ? (
+            <Note tone="info">
+              Choose a sex and a race group to load the figures. The reference is published one
+              group at a time, so there is no combined row to show in the meantime.
+            </Note>
+          ) : !profile ? (
+            <Note tone="warn">
+              No reference data for that combination.
+            </Note>
+          ) : pane === "likely" ? (
+            <Stack tight>
+              {likely.length === 0 ? (
+                <Empty>Nothing reportable for this profile.</Empty>
+              ) : (
+                likely.map((r) => (
+                  <div key={r.id}>
+                    <div className="row" style={{ gap: 8, flexWrap: "nowrap" }}>
+                      <span style={{ fontWeight: 600, fontSize: 14.5, minWidth: 0 }}>
+                        {shortName(r.id)}
+                      </span>
+                      <span className="spacer num" style={{ fontSize: 14, fontWeight: 650 }}>
+                        {per100(r.cell.pct ?? 0)}
+                        <span style={{ color: "var(--ink-faint)", fontWeight: 500 }}> per 100</span>
+                      </span>
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      <Meter pct={((r.cell.pct ?? 0) / topPct) * 100} />
+                    </div>
+                    <p className="fine" style={{ marginTop: 5 }}>
+                      {r.given ? (
+                        <>
+                          among people with {shortName(r.given).toLowerCase()}
+                          {typeof r.cell.chg === "number" && (
+                            <>
+                              , {r.cell.chg >= 0 ? "+" : ""}
+                              {r.cell.chg.toFixed(1)} points against {per100(r.cell.base ?? 0)} without
+                              it
+                            </>
+                          )}
+                        </>
+                      ) : r.cell.lo !== undefined && r.cell.hi !== undefined ? (
+                        <>
+                          range {per100(r.cell.lo)} to {per100(r.cell.hi)} per 100 people
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                ))
+              )}
+            </Stack>
+          ) : (
+            <Stack tight>
+              <Hero
+                value={usd(perYear(totals.typical))}
+                label={`expected health spending a year, averaged over the next ${years} years`}
+                tone="ok"
+              />
+              <Fine>
+                Between {usd(perYear(totals.low))} and {usd(perYear(totals.high))} a year, pairing the
+                ends of the prevalence interval with the ends of the cost band.
+              </Fine>
+              <Divider />
+              <StatRow two>
+                <Stat value={usd(perYear(totals.certainTypical))} label="From what is already diagnosed" />
+                <Stat
+                  value={usd(perYear(totals.probabilisticTypical))}
+                  label="Weighted by how likely the rest are"
+                />
+              </StatRow>
+            </Stack>
+          )}
+        </Stack>
+      </Card>
+
+      {pane === "burden" && risks.length > 0 && (
+        <Card flush>
+          <div style={{ padding: "14px 16px 4px" }}>
+            <Eyebrow>Prevalence times cost, per condition</Eyebrow>
+          </div>
+          {risks.slice(0, 9).map((r) => (
+            <ListRow
+              key={r.id}
+              icon={<IconChart />}
+              tone={r.diagnosed ? "ok" : "neutral"}
+              title={shortName(r.id)}
+              sub={
+                r.diagnosed
+                  ? "Diagnosed, counted in full"
+                  : `${per100(r.cell.pct ?? 0)} per 100${r.given ? ` with ${shortName(r.given).toLowerCase()}` : ""}`
+              }
+              amount={
+                <span style={{ color: r.diagnosed ? "var(--ok)" : undefined }}>
+                  {r.ev ? usd(perYear(r.ev.typical)) : "—"}
+                </span>
+              }
+              amountSub={
+                r.ev ? `${usdShort(perYear(r.ev.low))} to ${usdShort(perYear(r.ev.high))}` : undefined
+              }
+            />
+          ))}
+          <div style={{ padding: "10px 16px 14px" }}>
+            <Fine>
+              Each figure is the chance of carrying the condition multiplied by what carrying it
+              costs, spread evenly across the years ahead at a 3% discount rate. A condition already
+              diagnosed is counted at its full cost.
+              {conditioningOnly.length > 0 && (
+                <>
+                  {" "}
+                  {conditioningOnly.map((id) => shortName(id)).join(" and ")}{" "}
+                  {conditioningOnly.length === 1 ? "has" : "have"} no cost model here, so{" "}
+                  {conditioningOnly.length === 1 ? "it is" : "they are"} used to adjust the rates
+                  above rather than priced.
+                </>
+              )}
+            </Fine>
+          </div>
+        </Card>
+      )}
+
+      {carried.length > 0 && pane === "likely" && (
+        <Card>
+          <Stack tight>
+            <SectionHead title="Already diagnosed" right={<Badge tone="ok">{carried.length}</Badge>} />
+            <div className="chips">
+              {carried.map((r) => (
+                <span key={r.id} className="chip">
+                  {shortName(r.id)}
+                </span>
+              ))}
+            </div>
+            <Fine>
+              These are counted as certain in the cost figure and left out of the likely list.
+            </Fine>
+          </Stack>
+        </Card>
+      )}
+
+      <Card>
+        <Stack tight>
+          <SectionHead
+            title="Where you live"
+            right={exposome ? <Badge tone={TONE[exposome.worst.level]}>{LEVEL_LABEL[exposome.worst.level]}</Badge> : undefined}
+          />
+          {!exposome ? (
+            <Note tone="info">
+              Enter a ZIP code to add the local exposure picture.
+            </Note>
+          ) : (
+            <>
+              <div className="row" style={{ gap: 16, flexWrap: "nowrap" }}>
+                <Ring
+                  pct={exposome.compositeIndex}
+                  tone={ringTone(TONE[exposome.worst.level])}
+                  center={exposome.compositeIndex.toFixed(0)}
+                  label="Burden index"
+                  size={62}
+                />
+                <div className="stack-s" style={{ minWidth: 0 }}>
+                  <Stat
+                    value={`${exposome.compositeIndex >= nationalIdx ? "+" : ""}${(
+                      exposome.compositeIndex - nationalIdx
+                    ).toFixed(0)}`}
+                    label="Index points against the national median county"
+                  />
+                  <Stat
+                    value={usd(annualEquivalent(exposome.typical, exposome.years))}
+                    label="Attributable cost a year"
+                  />
+                </div>
+              </div>
+              <Divider />
+              <Stack tight>
+                {exposome.rows.slice(0, 5).map((r: ExposureRow) => (
+                  <Rail key={r.domain.id} tone={TONE[r.level]}>
+                    <div className="row" style={{ flexWrap: "nowrap" }}>
+                      <strong style={{ fontSize: 14.5 }}>{r.domain.label}</strong>
+                      <span className="spacer num" style={{ fontSize: 13 }}>
+                        {usd(annualEquivalent(r.typical, exposome.years))}/yr
+                      </span>
+                    </div>
+                    <p className="fine" style={{ marginTop: 2 }}>
+                      {r.readout}
+                    </p>
+                  </Rail>
+                ))}
+              </Stack>
+            </>
+          )}
+        </Stack>
+      </Card>
+    </>
+  );
 
   return (
     <Stack>
@@ -107,130 +455,20 @@ export function PreventiveCheck() {
           <Badge tone="new">New</Badge>
         </div>
         <Lede>
-          What is statistically most likely to affect someone with your profile, plus what living in
-          your county adds on top. Use it to decide what to actually get screened for — not as a
-          diagnosis.
+          What is statistically most likely to affect someone with your profile, what living in your
+          county adds on top, and what both are worth per year. Use it to decide what to get
+          screened for, not as a diagnosis.
         </Lede>
       </div>
-
-      <Split
-        controls={
-          <Card>
-            <Stack tight>
-              <Field label="Age">
-                <Chips options={db.age_groups} value={ageId} onChange={setAgeId} />
-              </Field>
-              <Field label="Sex">
-                <Chips options={db.sex_groups} value={sexId} onChange={setSexId} />
-              </Field>
-              <Field label="Race / ethnicity" hint="Reflects reported population statistics, not biology.">
-                <Chips options={db.race_groups} value={raceId} onChange={setRaceId} />
-              </Field>
-              <Divider />
-              <Field
-                label="ZIP code"
-                hint={county ? `${county.name}, ${county.stateName}` : "Adds the local exposure picture"}
-              >
-                <input
-                  className="input"
-                  inputMode="numeric"
-                  maxLength={5}
-                  value={zip}
-                  placeholder="e.g. 10001"
-                  onChange={(e) => setZip(e.target.value.replace(/\D/g, ""))}
-                />
-              </Field>
-              <Fine>
-                Population statistics describe groups, not individuals. Nothing here is a prediction
-                about you, and none of it leaves this browser.
-              </Fine>
-            </Stack>
-          </Card>
-        }
-        results={
-          <>
-            <Card raised>
-              <Stack tight>
-                <Eyebrow>Most likely for this profile</Eyebrow>
-                {!profile ? (
-                  <Note tone="warn">
-                    No reference data for that combination. Try a broader race or sex selection.
-                  </Note>
-                ) : topRisks.length === 0 ? (
-                  <Empty>Nothing reportable for this profile.</Empty>
-                ) : (
-                  <div style={{ margin: "0 -18px -18px" }}>
-                    {topRisks.map(({ id, cell }) => (
-                      <LineItem
-                        key={id}
-                        label={shortName(id)}
-                        amount={<>{per100(cell!.pct ?? 0)}</>}
-                        sub={
-                          cell!.lo !== undefined && cell!.hi !== undefined
-                            ? `range ${per100(cell!.lo)} – ${per100(cell!.hi)} per 100 people`
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
-              </Stack>
-            </Card>
-
-            <Card>
-              <Stack tight>
-                <div className="row">
-                  <H2>Where you live</H2>
-                  {exposome && (
-                    <span style={{ marginLeft: "auto" }}>
-                      <Badge tone={TONE[exposome.worst.level]}>
-                        {LEVEL_LABEL[exposome.worst.level]}
-                      </Badge>
-                    </span>
-                  )}
-                </div>
-                {!exposome ? (
-                  <Note tone="info">Enter a ZIP code to add the local exposure picture.</Note>
-                ) : (
-                  <>
-                    <StatRow>
-                      <Stat value={exposome.compositeIndex.toFixed(0)} label="Burden index (0–100)" />
-                      <Stat
-                        value={`${exposome.compositeIndex >= national ? "+" : ""}${(
-                          exposome.compositeIndex - national
-                        ).toFixed(0)}`}
-                        label="vs national median"
-                      />
-                      <Stat value={usdShort(exposome.typical)} label={`Typical cost, ${exposome.years} yr`} />
-                    </StatRow>
-                    <Divider />
-                    <Stack tight>
-                      {exposome.rows
-                        .slice()
-                        .sort((a: ExposureRow, b: ExposureRow) => b.index - a.index)
-                        .slice(0, 5)
-                        .map((r) => (
-                          <Rail key={r.domain.id} tone={TONE[r.level]}>
-                            <div className="row">
-                              <strong>{r.domain.label}</strong>
-                              <span style={{ marginLeft: "auto" }} className="num">
-                                {r.index.toFixed(0)}
-                              </span>
-                              <Badge tone={TONE[r.level]}>{LEVEL_LABEL[r.level]}</Badge>
-                            </div>
-                            <p className="fine" style={{ marginTop: 2 }}>
-                              {r.readout}
-                            </p>
-                          </Rail>
-                        ))}
-                    </Stack>
-                  </>
-                )}
-              </Stack>
-            </Card>
-          </>
-        }
-      />
+      {!county && (
+        <ListRow
+          icon={<IconPin />}
+          tone="warn"
+          title="No ZIP code yet"
+          sub="The local exposure picture needs one"
+        />
+      )}
+      <Split controls={controls} results={results} />
     </Stack>
   );
 }

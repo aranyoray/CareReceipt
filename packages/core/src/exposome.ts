@@ -268,6 +268,16 @@ export function exposomeFor(county: County, ageId: string): ExposomeResult {
   };
 }
 
+/**
+ * Composite burden index of the national-median county, on the same 0-100
+ * scale as `compositeIndex`. `nationalBaseline` below is the dollar figure and
+ * the two are not interchangeable.
+ */
+export function nationalIndex(): number {
+  const totalBase = DOMAINS.reduce((s, d) => s + d.base, 0);
+  return DOMAINS.reduce((s, d, i) => s + NATIONAL[i] * d.base, 0) / totalBase;
+}
+
 /** National-median county, used as the comparison baseline on the receipt. */
 export function nationalBaseline(ageId: string): number {
   const horizonScale = annuityFactor(yearsAtRisk(ageId)) / annuityFactor(REFERENCE_YEARS);

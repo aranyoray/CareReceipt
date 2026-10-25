@@ -244,6 +244,79 @@ export function parseBill(text: string): BillLine[] {
   return out;
 }
 
+// ------------------------------------------------------------------- OCR
+
+/**
+ * Tidy text that came out of a photo before it is parsed.
+ *
+ * Optical recognition of a printed bill fails in a small, repeatable set of
+ * ways: zero read as the letter O inside a CPT code, one read as l or I, a
+ * dollar sign read as S, and a line wrapped so the code sits on one row and
+ * the charge on the next. Each is corrected only inside a token that is
+ * already mostly digits, so wording in the description is left alone.
+ *
+ * Nothing here guesses at a value: a token that is not digit-shaped is passed
+ * through untouched, and a line the parser cannot read stays unread rather
+ * than being invented.
+ */
+export function cleanOcrText(raw: string): string {
+  const fixDigits = (tok: string): string =>
+    tok
+      .replace(/[OoQ]/g, "0")
+      .replace(/[lI|]/g, "1")
+      .replace(/[Ss]/g, "5")
+      .replace(/B/g, "8")
+      .replace(/Z/g, "2");
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) =>
+      line
+        // A dollar sign leading a figure is frequently read as the letter S.
+        // Only the letter is corrected: a bare 5 in that position is far more
+        // often a unit count than a mangled dollar sign.
+        .replace(/(^|\s)S\s?(?=\d)/g, "$1$")
+        .split(/\s+/)
+        .map((tok) => {
+          const core = tok.replace(/^[^\w]+|[^\w]+$/g, "");
+          if (core.length < 2) return tok;
+          // Mostly-digits tokens are codes, units, dates or money.
+          const digits = (core.match(/\d/g) ?? []).length;
+          const letters = (core.match(/[A-Za-z]/g) ?? []).length;
+          if (digits >= 2 && digits >= letters) {
+            return tok.replace(core, fixDigits(core));
+          }
+          return tok;
+        })
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
+    .filter((line) => line.length > 0);
+
+  // Rejoin a line whose charge wrapped onto the row below it.
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const next = lines[i + 1];
+    const hasCode = CODE_RE.test(line);
+    MONEY_RE.lastIndex = 0;
+    const hasMoney = MONEY_RE.test(line);
+    if (hasCode && !hasMoney && next) {
+      MONEY_RE.lastIndex = 0;
+      const nextMoney = MONEY_RE.test(next);
+      if (nextMoney && !CODE_RE.test(next)) {
+        out.push(`${line} ${next}`);
+        i += 1;
+        continue;
+      }
+    }
+    out.push(line);
+  }
+
+  return out.join("\n");
+}
+
 // ------------------------------------------------------------- geo adjustment
 
 /**

@@ -120,6 +120,19 @@ export function annuityFactor(years: number): number {
   return (1 - Math.pow(1 + r, -years)) / r;
 }
 
+/**
+ * The level annual amount equivalent to a discounted present value.
+ *
+ * Burden is reported per year rather than as a lifetime total: a six figure
+ * lifetime number is both easier to misread and harder to act on than "about
+ * this much a year, every year, from here". Dividing by the same annuity
+ * factor the present value was built with keeps the two consistent.
+ */
+export function annualEquivalent(presentValue: number, years: number): number {
+  const f = annuityFactor(years);
+  return f > 0 ? presentValue / f : 0;
+}
+
 export interface LifetimeCost {
   low: number;
   typical: number;

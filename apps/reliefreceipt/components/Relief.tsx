@@ -17,15 +17,19 @@ import {
   Card,
   Divider,
   Eyebrow,
-  Field,
   Fine,
   H1,
-  H2,
+  Hero,
+  IconDoc,
+  IconPhone,
+  IconPin,
   Lede,
-  LineItem,
+  ListRow,
+  Metric3,
   Note,
+  NumberField,
   Rail,
-  Split,
+  SectionHead,
   Stack,
   Stat,
   StatRow,
@@ -40,7 +44,56 @@ const TIER_LABEL = {
   unlikely: "Unlikely on income alone",
 } as const;
 
-export function Relief() {
+/**
+ * Where this household sits against the two thresholds in its state's policy:
+ * everything below the free line is written off, everything up to the discount
+ * line is reduced, and the marker is the reading.
+ */
+function FplBands({ freePct, discountPct, fplPct }: { freePct: number; discountPct: number; fplPct: number }) {
+  const max = Math.max(discountPct * 1.25, fplPct * 1.1, 100);
+  const w = (v: number) => `${Math.max(0, Math.min(100, (v / max) * 100))}%`;
+  return (
+    <div>
+      <div className="meter" style={{ position: "relative", height: 14 }}>
+        <span style={{ width: w(freePct), background: "var(--ok)", height: "100%" }} />
+        <span className="meter-gap" />
+        <span
+          style={{
+            width: `calc(${w(discountPct - freePct)} - 2px)`,
+            background: "var(--warn)",
+            height: "100%",
+          }}
+        />
+        <span
+          aria-hidden="true"
+          style={{
+            position: "absolute",
+            left: `calc(${w(fplPct)} - 1.5px)`,
+            top: -3,
+            width: 3,
+            height: 20,
+            borderRadius: 2,
+            background: "var(--ink)",
+            boxShadow: "0 0 0 2px var(--surface)",
+          }}
+        />
+      </div>
+      <div className="legend" style={{ marginTop: 8 }}>
+        <span className="legend-i">
+          <span className="legend-sw" style={{ background: "var(--ok)" }} /> Free to {freePct}% FPL
+        </span>
+        <span className="legend-i">
+          <span className="legend-sw" style={{ background: "var(--warn)" }} /> Discounted to {discountPct}%
+        </span>
+        <span className="legend-i">
+          <span className="legend-sw" style={{ background: "var(--ink)" }} /> You, {Math.round(fplPct)}%
+        </span>
+      </div>
+    </div>
+  );
+}
+
+export function Relief({ view }: { view: "position" | "letter" }) {
   const [geo, setGeo] = useState<Geo | null>(null);
   const [zipMap, setZipMap] = useState<Record<string, string> | null>(null);
   const [zip, setZip] = useStored("zip", "");
@@ -108,140 +161,172 @@ export function Relief() {
     }
   };
 
+  const controls = (
+    <Card>
+      <Stack tight>
+        <NumberField
+          label="ZIP code"
+          value={zip}
+          onChange={setZip}
+          maxLength={5}
+          placeholder="e.g. 10001"
+          hint={county ? `${county.name}, ${county.stateName}` : "Sets which state's rules apply"}
+        />
+        <NumberField
+          label="Annual household income"
+          value={income}
+          onChange={setIncome}
+          prefix="$"
+          placeholder="0"
+        />
+        <NumberField
+          label="People in household"
+          value={household}
+          onChange={setHousehold}
+          maxLength={2}
+          placeholder="1"
+        />
+        <NumberField
+          label="Balance owed"
+          value={owed}
+          onChange={setOwed}
+          prefix="$"
+          placeholder="0"
+          hint="After any bill corrections you have already won."
+        />
+        <Fine>
+          Everything stays in this browser. Apply even if you think you earn too much: eligibility
+          is judged per date of service, can be applied retroactively, and hardship provisions sit
+          outside the income test.
+        </Fine>
+      </Stack>
+    </Card>
+  );
+
+  if (view === "letter") {
+    return (
+      <Stack>
+        {!elig ? (
+          <Card>
+            <Note tone="info">Enter a ZIP code on the previous tab to load your state&apos;s rules.</Note>
+          </Card>
+        ) : (
+          <>
+            <Card raised>
+              <Stack tight>
+                <SectionHead
+                  title="Your application letter"
+                  right={<Badge tone={TIER_TONE[elig.tier]}>{TIER_LABEL[elig.tier]}</Badge>}
+                />
+                <textarea className="textarea" readOnly value={letter} style={{ minHeight: 300 }} />
+                <Button primary wide onClick={copy}>
+                  {copied ? "Letter copied" : "Copy the letter"}
+                </Button>
+              </Stack>
+            </Card>
+            <Card flush>
+              <div style={{ padding: "14px 16px 4px" }}>
+                <Eyebrow>Then</Eyebrow>
+              </div>
+              <ListRow
+                icon={<IconDoc />}
+                title="Send it in writing"
+                sub="Email or post to the billing department, and keep a copy"
+              />
+              <ListRow
+                icon={<IconPhone />}
+                title="Ask for collection to pause"
+                sub="Most policies require it while an application is open"
+              />
+              <ListRow
+                icon={<IconPin />}
+                title="Ask for the dates of service it covers"
+                sub="Assistance is usually assessed per date, and can be applied retroactively"
+              />
+            </Card>
+          </>
+        )}
+      </Stack>
+    );
+  }
+
   return (
     <Stack>
       <div>
         <H1>Get a hospital bill reduced or written off</H1>
         <Lede>
-          Every non-profit hospital in the US is required to run a financial assistance programme,
-          and most people who qualify never apply. Work out what you are entitled to under your
-          state&apos;s rules, then send the letter.
+          Every non-profit hospital in the US has to run a financial assistance programme, and most
+          people who qualify never apply. Work out what you are entitled to under your state&apos;s
+          rules, then send the letter.
         </Lede>
       </div>
 
-      <Split
-        controls={
+      {!elig ? (
+        <>
+          {controls}
           <Card>
-            <Stack tight>
-              <Field
-                label="ZIP code"
-                hint={county ? `${county.name}, ${county.stateName}` : "Sets which state's rules apply"}
-              >
-                <input
-                  className="input"
-                  inputMode="numeric"
-                  maxLength={5}
-                  value={zip}
-                  placeholder="e.g. 10001"
-                  onChange={(e) => setZip(e.target.value.replace(/\D/g, ""))}
-                />
-              </Field>
-              <Field label="Annual household income">
-                <input
-                  className="input num"
-                  inputMode="numeric"
-                  value={income}
-                  onChange={(e) => setIncome(e.target.value.replace(/\D/g, ""))}
-                />
-              </Field>
-              <Field label="People in household">
-                <input
-                  className="input num"
-                  inputMode="numeric"
-                  value={household}
-                  onChange={(e) => setHousehold(e.target.value.replace(/\D/g, ""))}
-                />
-              </Field>
-              <Field label="Balance owed" hint="After any bill corrections you have already won.">
-                <input
-                  className="input num"
-                  inputMode="numeric"
-                  value={owed}
-                  onChange={(e) => setOwed(e.target.value.replace(/\D/g, ""))}
-                />
-              </Field>
-              <Fine>
-                Everything stays in this browser. Apply even if you think you earn too much —
-                eligibility is judged per date of service, can be applied retroactively, and
-                hardship provisions sit outside the income thresholds.
-              </Fine>
+            <Note tone="info">Enter a ZIP code to load your state&apos;s assistance rules.</Note>
+          </Card>
+        </>
+      ) : (
+        <>
+          <Card raised>
+            <Stack>
+              <Hero
+                value={usd(elig.estimatedOwed)}
+                label={`estimated balance after assistance, from ${usd(nOwed)} billed`}
+                tone={elig.estimatedOwed < nOwed ? "ok" : undefined}
+              />
+              <FplBands
+                freePct={elig.rule.freePct}
+                discountPct={elig.rule.discountPct}
+                fplPct={elig.fplPct}
+              />
+              <Rail tone={TIER_TONE[elig.tier]}>
+                <strong>{elig.headline}</strong>
+              </Rail>
             </Stack>
           </Card>
-        }
-        results={
-          !elig ? (
-            <Card>
-              <Note tone="info">Enter a ZIP code to load your state&apos;s assistance rules.</Note>
-            </Card>
-          ) : (
-            <>
-              <Card raised>
-                <Stack tight>
-                  <div className="row">
-                    <Eyebrow>Your position</Eyebrow>
-                    <span style={{ marginLeft: "auto" }}>
-                      <Badge tone={TIER_TONE[elig.tier]}>{TIER_LABEL[elig.tier]}</Badge>
-                    </span>
-                  </div>
-                  <StatRow>
-                    <Stat value={`${elig.fplPct.toFixed(0)}%`} label="of federal poverty level" />
-                    <Stat value={usd(fpl)} label={`FPL, household of ${nHousehold}`} />
-                    <Stat
-                      value={
-                        <span style={{ color: elig.estimatedOwed < nOwed ? "var(--ok)" : undefined }}>
-                          {usd(elig.estimatedOwed)}
-                        </span>
-                      }
-                      label="Estimated after assistance"
-                    />
-                  </StatRow>
-                  <Divider />
-                  <Rail tone={TIER_TONE[elig.tier]}>
-                    <strong>{elig.headline}</strong>
-                  </Rail>
-                </Stack>
-              </Card>
 
-              <Card>
-                <Stack tight>
-                  <H2>{county?.stateName} rules</H2>
-                  <div style={{ margin: "0 -18px" }}>
-                    <LineItem label="Programme" amount={elig.rule.programName} />
-                    <LineItem
-                      label="Free care at or below"
-                      amount={`${elig.rule.freePct}% FPL`}
-                      sub={`${usd((fpl * elig.rule.freePct) / 100)} for your household`}
-                    />
-                    <LineItem
-                      label="Sliding scale up to"
-                      amount={`${elig.rule.discountPct}% FPL`}
-                      sub={`${usd((fpl * elig.rule.discountPct) / 100)} for your household`}
-                    />
-                  </div>
-                  <Note tone="info">{elig.rule.note}</Note>
-                  {elig.rule.assetNote && <Note tone="warn">{elig.rule.assetNote}</Note>}
-                </Stack>
-              </Card>
+          <Card>
+            <StatRow>
+              <Stat value={`${elig.fplPct.toFixed(0)}%`} label="of the poverty level" />
+              <Stat value={usd(fpl)} label={`FPL, household of ${nHousehold}`} />
+              <Stat value={`${Math.round(elig.patientShare * 100)}%`} label="share you would pay" />
+            </StatRow>
+          </Card>
 
-              <Card>
-                <Stack tight>
-                  <div className="row">
-                    <H2>Your application letter</H2>
-                    <span style={{ marginLeft: "auto" }}>
-                      <Button onClick={copy}>{copied ? "Copied" : "Copy letter"}</Button>
-                    </span>
-                  </div>
-                  <textarea className="textarea" readOnly value={letter} style={{ minHeight: 280 }} />
-                  <Fine>
-                    Send it to the billing department in writing and keep a copy. Ask them to pause
-                    collection activity while the application is assessed.
-                  </Fine>
-                </Stack>
-              </Card>
-            </>
-          )
-        }
-      />
+          {controls}
+
+          <Card flush>
+            <div className="cat-head">
+              <span className="t">{county?.stateName} rules</span>
+            </div>
+            <Metric3
+              items={[
+                { k: "Free at", v: `${elig.rule.freePct}% FPL` },
+                { k: "Discount to", v: `${elig.rule.discountPct}% FPL` },
+                { k: "Programme", v: elig.rule.programName, text: true },
+              ]}
+            />
+            <Metric3
+              items={[
+                { k: "Free below", v: usd((fpl * elig.rule.freePct) / 100) },
+                { k: "Discount below", v: usd((fpl * elig.rule.discountPct) / 100) },
+                { k: "Your income", v: usd(nIncome) },
+              ]}
+            />
+            <div style={{ padding: "12px 16px 16px" }}>
+              <Stack tight>
+                <Note tone="info">{elig.rule.note}</Note>
+                {elig.rule.assetNote && <Note tone="warn">{elig.rule.assetNote}</Note>}
+              </Stack>
+            </div>
+          </Card>
+
+          <Divider />
+        </>
+      )}
     </Stack>
   );
 }
