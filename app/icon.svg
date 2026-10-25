@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="CareReceipt">
+  <title>CareReceipt</title>
+  <rect width="64" height="64" rx="14" fill="#124045"/>
+  <!-- a slip torn off at the bottom, with the line that is priced wrong flagged -->
+  <path d="M20 15a4 4 0 0 1 4-4h16a4 4 0 0 1 4 4v30l-3 6-3-6-3 6-3-6-3 6-3-6-3 6-3-6z" fill="#ffffff"/>
+  <rect x="25" y="19" width="14" height="3" rx="1.5" fill="#124045" opacity=".75"/>
+  <rect x="25" y="25" width="9" height="3" rx="1.5" fill="#124045" opacity=".4"/>
+  <rect x="25" y="31" width="14" height="3.4" rx="1.7" fill="#b3392a"/>
+  <rect x="30" y="37.6" width="9" height="3" rx="1.5" fill="#124045" opacity=".28"/>
+</svg>

@@ -6,7 +6,7 @@ import {
   type Flag,
   SAMPLE_BILL,
   buildScript,
-} from "@receipt/core";
+} from "@/lib/engine";
 import {
   Badge,
   Button,
@@ -37,7 +37,7 @@ import {
   StatRow,
   usd,
   usdShort,
-} from "@receipt/ui";
+} from "@/ui";
 import { useApp } from "./AppState";
 import { Scan } from "./Scan";
 

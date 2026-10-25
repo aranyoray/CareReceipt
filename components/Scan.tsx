@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef } from "react";
-import { Fine, IconCamera, IconDoc, Meter, Note, Stack } from "@receipt/ui";
+import { Fine, IconCamera, IconDoc, Meter, Note, Stack } from "@/ui";
 import { useApp } from "./AppState";
 
 /**

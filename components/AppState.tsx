@@ -12,8 +12,8 @@ import {
   loadGeo,
   loadZipMap,
   parseBill,
-} from "@receipt/core";
-import { useDebounced, useStored, useStoredList } from "@receipt/ui";
+} from "@/lib/engine";
+import { useDebounced, useStored, useStoredList } from "@/ui";
 import { readBillImage } from "@/lib/ocr";
 
 export type Tab = "home" | "bill" | "preventive";

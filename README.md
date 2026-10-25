@@ -1,36 +1,40 @@
-# Receipt monorepo
+<img src="public/logo-wordmark.svg" alt="CareReceipt" width="268">
 
-Two products over one engine, built from `billculate`.
+**Is this bill wrong?** Photograph or paste an itemised US hospital bill.
+CareReceipt prices every line against what the procedure actually costs where
+you live, says which lines are worth disputing, and writes the words to use on
+the phone.
 
-| | |
-|---|---|
-| **CareReceipt** | *Is this bill wrong?* Prices every line of an itemised US hospital bill against what the procedure actually costs locally, and says what is worth disputing. |
-| **ReliefReceipt** | *Can I get it waived?* Works out what charity care you qualify for under your state's rules and writes the application letter. |
+Its sister product, [ReliefReceipt](https://github.com/aranyoray/ReliefReceipt),
+answers the other half: *can I get it waived?* The two were one monorepo until
+they were split into a repository each; the engine under `lib/engine` and the
+design system under `ui` are vendored into both, identical on each side.
 
 ```
-packages/core    bill audit, charity-care rules, risk, exposome, geo, costs
-packages/ui      design system, primitives, charts, icons, app shell
-apps/carereceipt    Home + Bill check (scan, findings, line by line) + Preventive check [NEW]
-apps/reliefreceipt  What you qualify for + the application letter
+app/          one route, the shell and the three tabs
+components/   Home, BillCheck, PreventiveCheck, Scan, shared state
+lib/engine/   bill audit, risk, exposome, costs, geo, charity-care rules
+lib/ocr.ts    reading a bill from a photograph
+ui/           design system: tokens, primitives, charts, icons, app shell
+public/       county geography, the ZIP crosswalk, the risk reference
 ```
 
 ## Running it
 
 ```bash
 npm install
-npm run dev:care     # localhost:3000
-npm run dev:relief   # localhost:3001
-npm run build        # both
-npm run typecheck    # both
+npm run dev        # localhost:3000
+npm run build
+npm run typecheck
 ```
 
 ## The interface
 
 Built for a phone browser first and widened for a desktop one.
 
-**On a phone** each product is an app: a teal bar at the top, cards on a tinted
+**On a phone** it is an app: a teal bar at the top, cards on a tinted
 canvas, and a fixed tab bar at the bottom holding the sections a thumb reaches
-for. CareReceipt opens on a home screen that says where the bill in hand has
+for. It opens on a home screen that says where the bill in hand has
 got to (added, priced, findings ready), leads with the one figure that matters,
 and lists the single next thing to do. The bill screen is a segmented control
 over three views: the findings, the bill line by line, and the bill itself.
@@ -52,8 +56,8 @@ being written into `tokens.css`. Every chart has a table beside it: the running
 total has the line-by-line view, the category columns have the figures printed
 underneath.
 
-Tailwind is no longer imported. Nothing in either app used a utility class, and
-its generated `.ring` collided with the dial in the chart set.
+Tailwind is not imported. Nothing here used a utility class, and its generated
+`.ring` collided with the dial in the chart set.
 
 ## Scanning a bill
 
@@ -62,9 +66,9 @@ photograph is read on the device through Tesseract compiled to WebAssembly, so
 it is never uploaded; the engine's own files are fetched from a CDN on the
 first scan and cached by the browser after that.
 
-`apps/carereceipt/lib/ocr.ts` greys the photo, stretches its contrast when the
+`lib/ocr.ts` greys the photo, stretches its contrast when the
 exposure is uneven, and hands it to the reader. `cleanOcrText` in
-`packages/core/src/bill.ts` then corrects the handful of ways recognition fails
+`lib/engine/bill.ts` then corrects the handful of ways recognition fails
 on a printed bill — O read as zero inside a code, l or I read as one, a dollar
 sign read as S, a charge wrapped onto the row below — each only inside a token
 that is already mostly digits, so the wording is left alone. Nothing is
@@ -116,16 +120,16 @@ like you, and what where you live adds on top — so they are merged.
 
 **Charity care became its own product.** `federalPovertyLevel`, `charityRule`,
 `assessEligibility` and the FPL tables were buried inside `faircare.ts` behind
-the bill auditor. They are `packages/core/src/relief.ts` now and ReliefReceipt
-is built on them.
+the bill auditor. They are `lib/engine/relief.ts` now, and ReliefReceipt is
+built on them. The call script this app copies comes from the same file.
 
 ## Two bugs found in the original
 
 **`fmtUsd` was never defined.** `lib/faircare.ts` used it in 7 places, declared
 it once at line 730 as a non-exported local, then re-exported it at line 842.
-That worked only because definition and uses happened to sit in one file — the
-moment the module was split it broke. It is now exported from `core/src/bill.ts`
-and imported where needed.
+That worked only because definition and uses happened to sit in one file: the
+moment the module was split it broke. It is exported from `lib/engine/bill.ts`
+now and imported where needed.
 
 **Nothing rendered server-side.** Both pages gated their entire body behind a
 `mounted` flag, so the first paint was an empty shell and the HTML contained
@@ -134,8 +138,8 @@ unnecessary. CareReceipt's server HTML went from 6.9 KB to 17 KB.
 
 ## Verified
 
-- Both apps typecheck and build clean.
-- Both server-render their content.
+- Typechecks and builds clean.
+- Server-renders its content.
 - No `printer`, `receipt-col`, `PerforatedEdge` or `THERMAL` markup remains.
 - Bill engine on the sample bill: 9 lines parsed, $2,124 billed against $509
   fair, $1,615 recoverable, 13 flags.
@@ -149,11 +153,10 @@ unnecessary. CareReceipt's server HTML went from 6.9 KB to 17 KB.
 
 ## Notes
 
-Everything runs in the browser. No bill text, income figure, photograph or ZIP
-code leaves the device; state persists in `localStorage` only. The one network
-request either app makes beyond its own assets is the recognition engine's
-files on a first scan.
+Everything runs in the browser. No bill text, photograph or ZIP code leaves the
+device; state persists in `localStorage` only. The one network request the app
+makes beyond its own assets is the recognition engine's files on a first scan.
 
 The fair-price reference, the FPL tables and the state charity rules are
-point-in-time data. Check `packages/core/src/relief.ts` before relying on a
-threshold — these change annually.
+point-in-time data. Check `lib/engine/relief.ts` before relying on a threshold:
+these change annually.

@@ -21,7 +21,7 @@ import {
   StatRow,
   Stepper,
   usd,
-} from "@receipt/ui";
+} from "@/ui";
 import { useReliefUrl } from "@/lib/links";
 import { useApp } from "./AppState";
 import { Scan } from "./Scan";

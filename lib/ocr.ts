@@ -1,4 +1,4 @@
-import { cleanOcrText } from "@receipt/core";
+import { cleanOcrText } from "@/lib/engine";
 
 /* ============================================================================
    Reading a bill from a photo.

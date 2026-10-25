@@ -1,6 +1,6 @@
 "use client";
 
-import { Shell, type NavItem } from "@receipt/ui/Shell";
+import { Shell, type NavItem } from "@/ui/Shell";
 import {
   ActionBar,
   Button,
@@ -10,7 +10,7 @@ import {
   IconShield,
   Segmented,
   ThemeToggle,
-} from "@receipt/ui";
+} from "@/ui";
 import { AppState, useApp } from "@/components/AppState";
 import { BillCheck } from "@/components/BillCheck";
 import { Home } from "@/components/Home";

@@ -18,7 +18,7 @@ import {
   shortName,
   sumExpected,
   yearsAtRisk,
-} from "@receipt/core";
+} from "@/lib/engine";
 import {
   Badge,
   Card,
@@ -50,7 +50,7 @@ import {
   useStoredList,
   usd,
   usdShort,
-} from "@receipt/ui";
+} from "@/ui";
 import { useApp } from "./AppState";
 
 /** The ring has no informational step, so a typical reading uses the series hue. */
