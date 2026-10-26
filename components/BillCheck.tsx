@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { type Audit, type Eligibility, type Flag, SAMPLE_BILL, buildScript } from "@/lib/engine";
+import { type Audit, type Eligibility, type Flag, buildScript } from "@/lib/engine";
 import {
   Button,
   Card,
@@ -17,7 +17,6 @@ import {
   Lede,
   Legend,
   ListRow,
-  Metric3,
   Note,
   NumberField,
   Picker,
@@ -126,7 +125,7 @@ function BillInputs() {
             className="textarea"
             value={text}
             spellCheck={false}
-            placeholder={SAMPLE_BILL}
+            placeholder="Paste the itemised bill here"
             onChange={(e) => setText(e.target.value)}
           />
         </Field>
@@ -173,10 +172,6 @@ function BillInputs() {
         <Picker label="Household size" options={HOUSEHOLD} value={household} onChange={setHousehold} />
       </section>
 
-      <Fine>
-        Nothing is uploaded. Parsing, pricing and photo reading happen in this browser, and the text
-        stays in local storage on this device.
-      </Fine>
     </>
   );
 }
@@ -256,14 +251,6 @@ function BillSlip() {
             {usd(audit.totalRecoverable)}
           </span>
         </div>
-      </SlipSection>
-
-      <SlipSection>
-        <p className="slip-note">
-          Billed is what the provider asked for; fair is what the same code typically costs here. A
-          struck line looks like it should not be on the bill at all, so none of its charge counts as
-          fair. Unpriced lines are left out of the totals rather than counted as zero.
-        </p>
       </SlipSection>
     </>
   );
@@ -375,7 +362,6 @@ function Findings() {
                   ]}
                 />
               </div>
-              <p className="chart-cap">Running total down the bill, line by line.</p>
             </div>
           )}
         </Stack>
@@ -465,7 +451,6 @@ function Findings() {
                 />
               ))}
             </div>
-            <Fine>Share of the recoverable total by the kind of problem on the line.</Fine>
           </Stack>
         </Card>
       )}
@@ -481,32 +466,9 @@ function Findings() {
                 { label: "Above it", swatch: "s2" },
               ]}
             />
-            <Fine>Click a column to read what that category was billed.</Fine>
           </Stack>
         </Card>
       )}
-
-      <Card flush>
-        <div style={{ padding: "16px 18px 4px" }}>
-          <H2>Billed against fair, by category</H2>
-        </div>
-        {cats.map((c) => (
-          <div key={c.key}>
-            <div className="cat-head">
-              <span className="t">{c.key}</span>
-            </div>
-            <Metric3
-              items={[
-                { k: "Billed", v: usd(c.billed) },
-                { k: "Fair", v: usd(c.fair) },
-                c.over > 0
-                  ? { k: "Over", v: usd(c.over), tone: "danger" as const }
-                  : { k: "Over", v: "—", tone: "ok" as const },
-              ]}
-            />
-          </div>
-        ))}
-      </Card>
 
       <Card>
         <Stack tight>
@@ -516,10 +478,6 @@ function Findings() {
             <Stat value={audit.index.toFixed(2)} label={county ? `Index, ${county.name}` : "Index, national"} />
           </StatRow>
           <Divider />
-          <Fine>
-            {audit.pricedLines} of {audit.pricedLines + audit.unknownLines} lines matched the price
-            reference. Unpriced lines are left out of the totals rather than counted as zero.
-          </Fine>
         </Stack>
       </Card>
 
@@ -528,11 +486,6 @@ function Findings() {
       <Card>
         <Stack tight>
           <H2>The call script</H2>
-          <Fine>
-            What to say to the billing office, naming the findings on this bill
-            {eligibility ? " and asking for financial assistance" : ""}. Copy it and keep it in front of
-            you on the call.
-          </Fine>
           <Button primary wide onClick={copyScript}>
             {copied ? "Script copied" : "Copy the call script"}
           </Button>
@@ -579,12 +532,6 @@ function CharityCard({
               <Stat value={usd(owed)} label="Left after the disputes" />
               <Stat value={usd(e.estimatedOwed)} label="Estimated to pay with assistance" />
             </StatRow>
-            <Fine>
-              Free at or below {e.rule.freePct}% of the poverty level
-              {e.rule.discountPct > e.rule.freePct && `, discounted to ${e.rule.discountPct}%`}. This
-              household is at {Math.round(e.fplPct)}% of {usd(e.fpl)}. {e.rule.note}
-              {e.rule.assetNote ? ` ${e.rule.assetNote}` : ""}
-            </Fine>
             <div>
               <Button small onClick={onApply}>
                 Write the application letter
@@ -592,10 +539,6 @@ function CharityCard({
             </div>
           </>
         )}
-        <Fine>
-          Apply even if you think you earn too much: eligibility is judged per date of service, can be
-          applied retroactively, and hardship provisions sit outside the income test.
-        </Fine>
       </Stack>
     </Card>
   );

@@ -214,10 +214,6 @@ export function PreventiveCheck() {
         </Button>
         {stale && <Fine>The profile has changed since this receipt was printed.</Fine>}
       </div>
-      <Fine>
-        Population statistics describe groups, not individuals. Nothing here is a prediction about
-        you, and none of it leaves this browser.
-      </Fine>
     </>
   );
 

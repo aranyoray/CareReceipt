@@ -177,11 +177,6 @@ export function FinancialHelp() {
         </Button>
         {stale && <Fine>The details have changed since this receipt was printed.</Fine>}
       </div>
-      <Fine>
-        Apply even if you think you earn too much: eligibility is judged per date of service, can be
-        applied retroactively, and hardship provisions sit outside the income test. Nothing here leaves
-        this browser.
-      </Fine>
     </>
   );
 
@@ -231,10 +226,6 @@ export function FinancialHelp() {
               { k: "Your income", v: usd(result.nIncome) },
             ]}
           />
-          <p className="slip-note" style={{ marginTop: 12 }}>
-            {result.elig.rule.note}
-            {result.elig.rule.assetNote ? ` ${result.elig.rule.assetNote}` : ""}
-          </p>
         </SlipSection>
 
         <SlipSection>
