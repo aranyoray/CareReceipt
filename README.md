@@ -5,11 +5,6 @@ CareReceipt prices every line against what the procedure actually costs where
 you live, says which lines are worth disputing, and writes the words to use on
 the phone.
 
-Its sister product, [ReliefReceipt](https://github.com/aranyoray/ReliefReceipt),
-answers the other half: *can I get it waived?* The two were one monorepo until
-they were split into a repository each; the engine under `lib/engine` and the
-design system under `ui` are vendored into both, identical on each side.
-
 ```
 app/          one route, the workspace and its two screens
 components/   BillCheck, PreventiveCheck, Scan, Slip, shared state
@@ -105,36 +100,7 @@ the level annual amount, which is both easier to read and easier to act on than
 a six figure lifetime total. Prevalence times cost, per condition, is back on
 the screen with it.
 
-## What changed from Billculate
-
-**The receipt paper is gone.** Billculate rendered a thermal printer: a housing
-with a status LED, a slot, and a one-second paper-feed animation that grew a
-cream page out of it. Findings were rows on that page, separated by dotted
-leaders, with a tilted red rubber stamp for the verdict. Everything was
-monospaced.
-
-None of it survives. `Workspace`, `PrintStage`, `usePrinted`, `ReceiptPaper`,
-`PerforatedEdge`, `DashRule` and `Stamp` are all deleted. A finding is a row
-in a card and severity is a coloured rail. Printing came back later in a form of
-its own: a white clinical slip drawn out of a navy sleeve (`components/Slip.tsx`),
-not a thermal roll.
-
-The one thing kept is tabular figures — columns of money do have to line up — so
-`--font-num` is still monospaced while prose is not.
-
-**Bill check is the product.** It is the default view and the first thing in the
-nav. The old three-tab split gave it equal billing with two research features.
-
-**Preventive check is one feature.** Risk Receipt and The Exposome
-answered halves of the same question — what is likely to go wrong for someone
-like you, and what where you live adds on top — so they are merged.
-
-**Charity care became its own product.** `federalPovertyLevel`, `charityRule`,
-`assessEligibility` and the FPL tables were buried inside `faircare.ts` behind
-the bill auditor. They are `lib/engine/relief.ts` now, and ReliefReceipt is
-built on them. The call script this app copies comes from the same file.
-
-## Two bugs found in the original
+## Two bugs found and fixed
 
 **`fmtUsd` was never defined.** `lib/faircare.ts` used it in 7 places, declared
 it once at line 730 as a non-exported local, then re-exported it at line 842.

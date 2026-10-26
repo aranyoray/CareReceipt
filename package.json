@@ -4,9 +4,9 @@
   "private": true,
   "description": "CareReceipt — price an itemised US hospital bill line by line and see what is worth disputing.",
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 3000",
+    "start": "next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

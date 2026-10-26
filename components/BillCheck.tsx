@@ -31,7 +31,6 @@ import {
   usd,
   usdShort,
 } from "@/ui";
-import { useReliefUrl } from "@/lib/links";
 import { useApp } from "./AppState";
 import { Scan } from "./Scan";
 import { SlipHead, SlipSection, SlipStage, usePrinted } from "./Slip";
@@ -544,7 +543,7 @@ function Findings() {
 
 /**
  * Charity care sits with the findings: the number that matters is what is left
- * after both the disputes and the assistance.  ReliefReceipt has the full
+ * after both the disputes and the assistance.
  * assessment and the application.
  */
 function CharityCard({
@@ -556,7 +555,6 @@ function CharityCard({
   owed: number;
   hasCounty: boolean;
 }) {
-  const reliefUrl = useReliefUrl();
   const e = eligibility;
 
   return (
@@ -588,11 +586,7 @@ function CharityCard({
         )}
         <Fine>
           Apply even if you think you earn too much: eligibility is judged per date of service, can be
-          applied retroactively, and hardship provisions sit outside the income test.{" "}
-          <a className="link" href={reliefUrl}>
-            ReliefReceipt
-          </a>{" "}
-          has the full assessment and the application.
+          applied retroactively, and hardship provisions sit outside the income test.
         </Fine>
       </Stack>
     </Card>

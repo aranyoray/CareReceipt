@@ -69,7 +69,7 @@ interface Risk {
 }
 
 /**
- * Risk Receipt and The Exposome were separate tabs in Billculate. They answer
+ * Population risk and the local exposure picture answer
  * halves of one question — what is likely to go wrong for someone like you,
  * and what living where you live adds on top — so they are one feature here,
  * with the dollar figure both of them produce reported per year.
