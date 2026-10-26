@@ -11,10 +11,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  // The app bar runs under the status bar and the tab bar under the home
-  // indicator, so the page has to own the safe areas.
-  viewportFit: "cover",
-  themeColor: "#124045",
+  themeColor: "#16233f",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

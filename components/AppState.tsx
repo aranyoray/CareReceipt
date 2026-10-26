@@ -4,9 +4,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import {
   type Audit,
   type County,
+  type Eligibility,
   type Flag,
   type Geo,
   SAMPLE_BILL,
+  assessEligibility,
   auditBill,
   countyForZip,
   loadGeo,
@@ -16,8 +18,7 @@ import {
 import { useDebounced, useStored, useStoredList } from "@/ui";
 import { readBillImage } from "@/lib/ocr";
 
-export type Tab = "home" | "bill" | "preventive";
-export type BillView = "findings" | "lines" | "input";
+export type Tab = "bill" | "preventive";
 
 export interface ScanState {
   busy: boolean;
@@ -30,9 +31,7 @@ export interface ScanState {
 
 interface AppValue {
   tab: Tab;
-  go: (tab: Tab, view?: BillView) => void;
-  view: BillView;
-  setView: (v: BillView) => void;
+  go: (tab: Tab) => void;
 
   text: string;
   setText: (v: string) => void;
@@ -40,9 +39,17 @@ interface AppValue {
   setZip: (v: string) => void;
   county: County | null;
   geoReady: boolean;
+  income: string;
+  setIncome: (v: string) => void;
+  household: string;
+  setHousehold: (v: string) => void;
 
   audit: Audit | null;
   serious: Flag[];
+  /** What is left after the recoverable amount is taken off. */
+  owed: number;
+  /** Charity care, once there is an income, a county and a bill. */
+  eligibility: Eligibility | null;
   flagKey: (f: Flag) => string;
   reviewed: string[];
   toggleReviewed: (key: string) => void;
@@ -62,16 +69,17 @@ export function useApp(): AppValue {
 }
 
 /**
- * One place for the state both the home screen and the bill screen read: the
- * bill text, where the person is, the audit computed from the two, and which
- * findings they have already been through.
+ * One place for the state both screens read: the bill text, where the person
+ * is, the audit computed from the two, charity care, and which findings they
+ * have already been through.
  */
 export function AppState({ children }: { children: React.ReactNode }) {
-  const [tab, setTab] = useState<Tab>("home");
-  const [view, setView] = useState<BillView>("findings");
+  const [tab, setTab] = useState<Tab>("bill");
 
   const [text, setText] = useStored("bill_text", "");
   const [zip, setZip] = useStored("zip", "");
+  const [income, setIncome] = useStored("cr_income", "");
+  const [household, setHousehold] = useStored("cr_household", "1");
   const [geo, setGeo] = useState<Geo | null>(null);
   const [zipMap, setZipMap] = useState<Record<string, string> | null>(null);
   const [reviewed, setReviewed] = useStoredList("bill_reviewed");
@@ -99,6 +107,14 @@ export function AppState({ children }: { children: React.ReactNode }) {
 
   const serious = useMemo(() => (audit ? audit.flags.filter((f) => f.severity !== "info") : []), [audit]);
 
+  const owed = audit ? Math.max(0, audit.totalBilled - audit.totalRecoverable) : 0;
+
+  const eligibility = useMemo(() => {
+    const amount = Number(income.replace(/\D/g, ""));
+    if (!audit || !county || amount <= 0) return null;
+    return assessEligibility(amount, Number(household) || 1, county.state, owed);
+  }, [income, household, county, audit, owed]);
+
   const flagKey = useCallback((f: Flag) => `${f.kind}:${f.lineIds.join("+")}`, []);
 
   const toggleReviewed = useCallback(
@@ -110,9 +126,8 @@ export function AppState({ children }: { children: React.ReactNode }) {
 
   const clearReviewed = useCallback(() => setReviewed([]), [setReviewed]);
 
-  const go = useCallback((next: Tab, nextView?: BillView) => {
+  const go = useCallback((next: Tab) => {
     setTab(next);
-    if (nextView) setView(nextView);
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }, []);
 
@@ -175,16 +190,20 @@ export function AppState({ children }: { children: React.ReactNode }) {
   const value: AppValue = {
     tab,
     go,
-    view,
-    setView,
     text,
     setText,
     zip,
     setZip,
     county,
     geoReady: geo !== null,
+    income,
+    setIncome,
+    household,
+    setHousehold,
     audit,
     serious,
+    owed,
+    eligibility,
     flagKey,
     reviewed,
     toggleReviewed,

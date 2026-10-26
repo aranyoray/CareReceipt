@@ -11,8 +11,8 @@ they were split into a repository each; the engine under `lib/engine` and the
 design system under `ui` are vendored into both, identical on each side.
 
 ```
-app/          one route, the shell and the three tabs
-components/   Home, BillCheck, PreventiveCheck, Scan, shared state
+app/          one route, the workspace and its two screens
+components/   BillCheck, PreventiveCheck, Scan, Slip, shared state
 lib/engine/   bill audit, risk, exposome, costs, geo, charity-care rules
 lib/ocr.ts    reading a bill from a photograph
 ui/           design system: tokens, primitives, charts, icons, app shell
@@ -30,28 +30,38 @@ npm run typecheck
 
 ## The interface
 
-Built for a phone browser first and widened for a desktop one.
+A desktop workspace, light only. A navy bar runs the full width with the
+product name and the screens as tabs: Bill check, Preventive, and a link to
+Relief. There is no home screen and no bottom tab bar.
 
-**On a phone** it is an app: a teal bar at the top, cards on a tinted
-canvas, and a fixed tab bar at the bottom holding the sections a thumb reaches
-for. It opens on a home screen that says where the bill in hand has
-got to (added, priced, findings ready), leads with the one figure that matters,
-and lists the single next thing to do. The bill screen is a segmented control
-over three views: the findings, the bill line by line, and the bill itself.
-Input arrives in a bottom sheet rather than inline, so the page never reflows
-around the system keyboard, and numeric fields open a keypad in that sheet on a
-touch screen while staying ordinary inputs on a desktop.
+Each screen is split in two. On the left, a full-height panel of ordinary
+form controls (native dropdowns, a checkbox dropdown for several choices,
+plain inputs) that scrolls on its own, with the Print receipt button pinned to
+its foot. On the right, the receipt. Narrow windows stack the panel above the
+receipt; nothing turns into sheets, keypads or segmented controls.
 
-**From 860px** the tab bar becomes a pill row in the header, single-column
-screens hold to a readable width, and the preventive check splits into controls
-on the left and results on the right.
+**Bill check.** The panel holds everything that goes into the bill: scan with
+the camera, add a photo, the pasted text, the example bill, the ZIP code, and
+household income and size for charity care. Print receipt produces the bill
+line by line as a white clinical slip, with billed against fair for every
+charge and the totals underneath; the findings, the charts, charity care and
+the call script follow beneath the slip.
 
-Both run light and dark from the same tokens, with a toggle for pinning one.
+**Preventive.** Age, sex, race and the conditions already diagnosed, plus the
+ZIP code, on the left. Print puts the most likely conditions, what they cost a
+year, the per-condition breakdown and the local exposure picture on one slip.
+
+**The print.** Until something is printed the right side shows a navy clinic
+sleeve with the top edge of a slip showing above it. Print draws the slip up
+and out of the sleeve, the sleeve drops away, and the slip settles while its
+sections come in one after another. With reduced motion the slip simply
+appears. Height returns to auto afterwards so nothing inside is clipped.
+Changing an input after printing offers Print it again.
 
 **Charts.** Two series at most, and they always mean the same thing: `s1` is
 the benchmark, `s2` is what was billed. Status colours are kept for state and
 never used as a series. Both series colours were checked for colour-vision
-separation and for contrast against the card surface in both themes before
+separation and for contrast against the card surface before
 being written into `tokens.css`. Every chart has a table beside it: the running
 total has the line-by-line view, the category columns have the figures printed
 underneath.
@@ -82,7 +92,7 @@ several.
 
 Age, sex and race are dropdowns and the conditions already diagnosed are one
 multi-select, which is what the screen used to spend half a phone display on as
-rows of chips. Every profile in the reference is one age band, one race group
+rows of chips; it is a checkbox dropdown now. Every profile in the reference is one age band, one race group
 and one sex, so the screen asks rather than guessing a default.
 
 Anything marked as diagnosed does two things: the other conditions are shown at
@@ -104,9 +114,10 @@ leaders, with a tilted red rubber stamp for the verdict. Everything was
 monospaced.
 
 None of it survives. `Workspace`, `PrintStage`, `usePrinted`, `ReceiptPaper`,
-`PerforatedEdge`, `DashRule` and `Stamp` are all deleted. A finding is now a row
-in a card, severity is a coloured rail, and a verdict is a badge. Results appear
-as soon as they are computed instead of being "printed" on demand.
+`PerforatedEdge`, `DashRule` and `Stamp` are all deleted. A finding is a row
+in a card and severity is a coloured rail. Printing came back later in a form of
+its own: a white clinical slip drawn out of a navy sleeve (`components/Slip.tsx`),
+not a thermal roll.
 
 The one thing kept is tabular figures — columns of money do have to line up — so
 `--font-num` is still monospaced while prose is not.
@@ -114,7 +125,7 @@ The one thing kept is tabular figures — columns of money do have to line up �
 **Bill check is the product.** It is the default view and the first thing in the
 nav. The old three-tab split gave it equal billing with two research features.
 
-**Preventive check is one feature, marked [NEW].** Risk Receipt and The Exposome
+**Preventive check is one feature.** Risk Receipt and The Exposome
 answered halves of the same question — what is likely to go wrong for someone
 like you, and what where you live adds on top — so they are merged.
 
@@ -143,7 +154,7 @@ unnecessary. CareReceipt's server HTML went from 6.9 KB to 17 KB.
 - No `printer`, `receipt-col`, `PerforatedEdge` or `THERMAL` markup remains.
 - Bill engine on the sample bill: 9 lines parsed, $2,124 billed against $509
   fair, $1,615 recoverable, 13 flags.
-- Screenshotted at 390px and 1280px, in light and dark, with no console or
+- Screenshotted at 390px and 1440px with no console or
   hydration errors on any screen.
 - Scanning end to end: a photographed statement read on the device, cleaned,
   parsed to 7 lines, and priced into findings.

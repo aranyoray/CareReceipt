@@ -1,45 +1,40 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { type Audit, type Eligibility, type Flag, SAMPLE_BILL, buildScript } from "@/lib/engine";
 import {
-  type AuditedLine,
-  type Flag,
-  SAMPLE_BILL,
-  buildScript,
-} from "@/lib/engine";
-import {
-  Badge,
   Button,
   Card,
   type Column,
   Columns,
   Divider,
-  Empty,
-  Eyebrow,
   Field,
   Fine,
   H2,
   Hero,
   IconCheck,
   IconFlag,
-  IconList,
+  Lede,
   Legend,
   ListRow,
   Metric3,
   Note,
   NumberField,
-  Num,
+  Picker,
   Ring,
   SectionHead,
   Spark,
+  Split,
   Stack,
   Stat,
   StatRow,
   usd,
   usdShort,
 } from "@/ui";
+import { useReliefUrl } from "@/lib/links";
 import { useApp } from "./AppState";
 import { Scan } from "./Scan";
+import { SlipHead, SlipSection, SlipStage, usePrinted } from "./Slip";
 
 const toneFor = (s: Flag["severity"]) => (s === "high" ? "danger" : s === "medium" ? "warn" : "info");
 
@@ -55,6 +50,11 @@ const KIND_LABEL: Record<string, string> = {
   surprise: "Out of network",
 };
 
+const HOUSEHOLD = Array.from({ length: 10 }, (_, i) => ({
+  id: String(i + 1),
+  label: `${i + 1} ${i === 0 ? "person" : "people"}`,
+}));
+
 interface CatRow {
   key: string;
   billed: number;
@@ -62,21 +62,227 @@ interface CatRow {
   over: number;
 }
 
+const auditKey = (a: Audit | null) =>
+  a ? `${a.lines.length}:${Math.round(a.totalBilled)}:${a.index.toFixed(2)}` : null;
+
+/**
+ * The bill workspace.  Everything that goes into the bill sits in the panel on
+ * the left; Print receipt draws the checked bill out of its sleeve on the
+ * right, and the findings, charity care and call script follow beneath it.
+ */
 export function BillCheck() {
+  const { audit } = useApp();
+  const [printedKey, setPrintedKey] = usePrinted<string>("bill");
+  const key = auditKey(audit);
+  const stale = printedKey !== null && key !== printedKey;
+
+  return (
+    <Split
+      controls={
+        <>
+          <Lede>
+            Photograph or paste an itemised hospital bill. Every line is priced against what the
+            procedure actually costs where the care happened.
+          </Lede>
+          <BillInputs />
+          <div className="panel-print">
+            <Button primary wide disabled={!key} onClick={() => key && setPrintedKey(key)}>
+              {printedKey === null ? "Print receipt" : stale ? "Print it again" : "Printed"}
+            </Button>
+            {!key && <Fine>Add a bill with at least one coded charge to print it.</Fine>}
+            {stale && <Fine>The bill has changed since this receipt was printed.</Fine>}
+          </div>
+        </>
+      }
+      results={
+        <SlipStage
+          stage="bill"
+          printKey={printedKey !== null && audit ? printedKey : null}
+          idle="Add a bill on the left, or use the example, then press Print receipt."
+          after={audit ? <Findings /> : null}
+        >
+          {audit && <BillSlip />}
+        </SlipStage>
+      }
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ inputs */
+
+function BillInputs() {
+  const { audit, text, setText, zip, setZip, county, income, setIncome, household, setHousehold, loadSample } =
+    useApp();
+
+  return (
+    <>
+      <section className="panel-sec">
+        <H2>The bill</H2>
+        <Scan />
+        <Field
+          label="Itemised bill"
+          hint="One line per charge, each with its code and amount. Edit anything the scan read wrongly."
+        >
+          <textarea
+            className="textarea"
+            value={text}
+            spellCheck={false}
+            placeholder={SAMPLE_BILL}
+            onChange={(e) => setText(e.target.value)}
+          />
+        </Field>
+        <div className="row">
+          <Button small onClick={loadSample}>
+            Try it with an example bill
+          </Button>
+          {text && (
+            <Button small quiet onClick={() => setText("")}>
+              Clear
+            </Button>
+          )}
+        </div>
+      </section>
+
+      <section className="panel-sec">
+        <H2>Where the care happened</H2>
+        <NumberField
+          label="ZIP code"
+          value={zip}
+          onChange={setZip}
+          maxLength={5}
+          placeholder="e.g. 10001"
+          hint={
+            county
+              ? `${county.name}, ${county.stateName}. Local price index ${audit ? audit.index.toFixed(2) : "—"}.`
+              : zip.length >= 5
+                ? "Not recognised, national prices used."
+                : "Sets the local price benchmark. Without it prices are national."
+          }
+        />
+      </section>
+
+      <section className="panel-sec">
+        <H2>For charity care</H2>
+        <NumberField
+          label="Household income a year"
+          value={income}
+          onChange={setIncome}
+          maxLength={7}
+          prefix="$"
+          hint="Tested against the state's financial assistance rules. Optional."
+        />
+        <Picker label="Household size" options={HOUSEHOLD} value={household} onChange={setHousehold} />
+      </section>
+
+      <Fine>
+        Nothing is uploaded. Parsing, pricing and photo reading happen in this browser, and the text
+        stays in local storage on this device.
+      </Fine>
+    </>
+  );
+}
+
+/* --------------------------------------------------------------- the slip */
+
+function BillSlip() {
+  const { audit, county } = useApp();
+  if (!audit) return null;
+  const over = Math.max(0, audit.totalBilled - audit.totalFair);
+  const date = audit.lines.find((l) => l.line.date)?.line.date;
+
+  return (
+    <>
+      <SlipHead
+        title="Itemised bill, checked"
+        lines={[
+          `${audit.lines.length} ${audit.lines.length === 1 ? "line" : "lines"}${date ? `, care on ${date}` : ""}. ${
+            audit.pricedLines
+          } matched the price reference.`,
+          county
+            ? `Priced for ${county.name}, ${county.stateName}, local index ${audit.index.toFixed(2)}.`
+            : "Priced at national rates. Add a ZIP code for local ones.",
+        ]}
+      />
+
+      <SlipSection>
+        <div className="sl-row sl-th" aria-hidden>
+          <span className="u">Units</span>
+          <span>Charge</span>
+          <span className="n">Billed</span>
+          <span className="n">Fair</span>
+        </div>
+        {audit.lines.map((l) => (
+          <div key={l.line.id} className={l.removed ? "sl-row struck" : "sl-row"}>
+            <span className="u num">{l.line.units}</span>
+            <span className="item">
+              <span className="item-t">{l.proc?.name ?? l.line.description}</span>
+              <span
+                className={
+                  l.removed ? "item-s danger" : l.overcharge > 0 ? "item-s warn" : "item-s"
+                }
+              >
+                {l.line.code}
+                {l.line.date ? ` · ${l.line.date}` : ""}
+                {l.removed
+                  ? " · should not be on the bill"
+                  : l.line.unknown
+                    ? " · not in the price reference"
+                    : l.overcharge > 0
+                      ? ` · ${usd(l.overcharge)} over${l.ratio > 1 ? `, ${l.ratio.toFixed(1)}× fair` : ""}`
+                      : " · within the fair range"}
+              </span>
+            </span>
+            <span className="n num">{usd(l.line.charge)}</span>
+            <span className="n num">{l.line.unknown ? "—" : usd(l.removed ? 0 : l.fairTypical)}</span>
+          </div>
+        ))}
+      </SlipSection>
+
+      <SlipSection>
+        <div className="sl-total">
+          <span>Billed</span>
+          <span className="num">{usd(audit.totalBilled)}</span>
+        </div>
+        <div className="sl-total">
+          <span>Fair, typical for this care</span>
+          <span className="num">{usd(audit.totalFair)}</span>
+        </div>
+        <div className="sl-total">
+          <span>Charged above the fair range</span>
+          <span className="num">{usd(over)}</span>
+        </div>
+        <div className="sl-total big">
+          <span>Plausibly recoverable</span>
+          <span className={audit.totalRecoverable > 0 ? "num danger" : "num ok"}>
+            {usd(audit.totalRecoverable)}
+          </span>
+        </div>
+      </SlipSection>
+
+      <SlipSection>
+        <p className="slip-note">
+          Billed is what the provider asked for; fair is what the same code typically costs here. A
+          struck line looks like it should not be on the bill at all, so none of its charge counts as
+          fair. Unpriced lines are left out of the totals rather than counted as zero.
+        </p>
+      </SlipSection>
+    </>
+  );
+}
+
+/* --------------------------------------------------------------- findings */
+
+function Findings() {
   const {
     audit,
     serious,
-    view,
-    text,
-    setText,
-    zip,
-    setZip,
     county,
     reviewed,
     toggleReviewed,
     clearReviewed,
     flagKey,
-    loadSample,
+    owed,
+    eligibility,
   } = useApp();
   const [copied, setCopied] = useState(false);
 
@@ -127,150 +333,21 @@ export function BillCheck() {
       .slice(0, 5);
   }, [serious]);
 
+  if (!audit) return null;
+
   const open = serious.filter((f) => !reviewed.includes(flagKey(f)));
   const done = serious.filter((f) => reviewed.includes(flagKey(f)));
-  const over = audit ? Math.max(0, audit.totalBilled - audit.totalFair) : 0;
+  const over = Math.max(0, audit.totalBilled - audit.totalFair);
 
   const copyScript = async () => {
-    if (!audit) return;
     try {
-      await navigator.clipboard.writeText(buildScript(audit, null, county));
+      await navigator.clipboard.writeText(buildScript(audit, eligibility, county));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       setCopied(false);
     }
   };
-
-  /* ------------------------------------------------------------- the bill */
-
-  if (view === "input") {
-    return (
-      <Stack>
-        <Card>
-          <Stack tight>
-            <Eyebrow>Where the care happened</Eyebrow>
-            <NumberField
-              label="ZIP code"
-              value={zip}
-              onChange={setZip}
-              maxLength={5}
-              placeholder="e.g. 10001"
-              hint={
-                county
-                  ? `${county.name}, ${county.stateName}. Local price index ${audit ? audit.index.toFixed(2) : "—"}.`
-                  : zip.length >= 5
-                    ? "Not recognised, national prices used"
-                    : "Sets the local price benchmark"
-              }
-            />
-          </Stack>
-        </Card>
-
-        <Card>
-          <Stack tight>
-            <Eyebrow>Add the bill</Eyebrow>
-            <Scan />
-          </Stack>
-        </Card>
-
-        <Card>
-          <Stack tight>
-            <Field
-              label="Itemised bill"
-              hint="One line per charge, each with its code and amount. Edit anything the scan read wrongly."
-            >
-              <textarea
-                className="textarea"
-                value={text}
-                spellCheck={false}
-                placeholder={SAMPLE_BILL}
-                onChange={(e) => setText(e.target.value)}
-              />
-            </Field>
-            <div className="row">
-              <Button small onClick={loadSample}>
-                Use the example bill
-              </Button>
-              {text && (
-                <Button small quiet onClick={() => setText("")}>
-                  Clear
-                </Button>
-              )}
-            </div>
-            <Fine>
-              Nothing is uploaded. Parsing, pricing and photo reading happen in this browser, and
-              the text stays in local storage on this device.
-            </Fine>
-          </Stack>
-        </Card>
-      </Stack>
-    );
-  }
-
-  if (!audit) {
-    return (
-      <Card>
-        <Empty>No billable lines yet. Scan or paste a bill to see what is worth disputing.</Empty>
-      </Card>
-    );
-  }
-
-  /* --------------------------------------------------------- line by line */
-
-  if (view === "lines") {
-    return (
-      <Stack>
-        <Card flush>
-          <div style={{ padding: "14px 16px 6px" }}>
-            <SectionHead
-              title="Line by line"
-              right={<Badge>{audit.lines.length} lines</Badge>}
-            />
-          </div>
-          {audit.lines.map((l: AuditedLine) => (
-            <ListRow
-              key={l.line.id}
-              clip
-              icon={<IconList />}
-              tone={l.removed ? "danger" : l.overcharge > 0 ? "warn" : "ok"}
-              flagged={l.removed}
-              title={l.line.description}
-              sub={
-                <>
-                  <Num>{l.line.code}</Num>
-                  {l.line.units > 1 ? ` · ${l.line.units} units` : ""}
-                  {l.line.date ? ` · ${l.line.date}` : ""}
-                </>
-              }
-              amount={usd(l.line.charge)}
-              amountSub={l.line.unknown ? "not priced" : `fair ${usd(l.fairTypical)}`}
-              footer={
-                l.removed || l.overcharge > 0 ? (
-                  <span className="row" style={{ gap: 6, marginTop: 6 }}>
-                    {l.removed && <Badge tone="danger">Should not be here</Badge>}
-                    {!l.removed && l.overcharge > 0 && (
-                      <Badge tone="warn">
-                        {usd(l.overcharge)} over
-                        {l.ratio > 1 ? ` · ${l.ratio.toFixed(1)}× fair` : ""}
-                      </Badge>
-                    )}
-                  </span>
-                ) : undefined
-              }
-            />
-          ))}
-        </Card>
-        <Fine>
-          {audit.pricedLines} of {audit.pricedLines + audit.unknownLines} lines matched the price
-          reference. Local index {audit.index.toFixed(2)}
-          {county ? ` for ${county.name}` : " (national)"}.
-        </Fine>
-      </Stack>
-    );
-  }
-
-  /* -------------------------------------------------------------- findings */
 
   return (
     <Stack>
@@ -306,12 +383,7 @@ export function BillCheck() {
 
       <Card>
         <Stack tight>
-          <SectionHead
-            title="To review"
-            right={
-              <Badge tone={open.length ? "danger" : "ok"}>{open.length || "clear"}</Badge>
-            }
-          />
+          <H2>{open.length ? `${open.length} ${open.length === 1 ? "finding" : "findings"} to review` : "Findings"}</H2>
           {open.length === 0 ? (
             <Note tone="ok">
               {serious.length === 0
@@ -319,7 +391,7 @@ export function BillCheck() {
                 : "Every finding has been through. The call script below still lists them all."}
             </Note>
           ) : (
-            <div style={{ margin: "0 -16px" }}>
+            <div className="bleed">
               {open.map((f) => {
                 const key = flagKey(f);
                 return (
@@ -332,7 +404,7 @@ export function BillCheck() {
                     amount={f.recoverable > 0 ? usd(f.recoverable) : undefined}
                     footer={
                       <span className="row" style={{ gap: 8, marginTop: 8 }}>
-                        <Badge tone={toneFor(f.severity)}>{KIND_LABEL[f.kind] ?? f.kind}</Badge>
+                        <span className={`kind ${toneFor(f.severity)}`}>{KIND_LABEL[f.kind] ?? f.kind}</span>
                         <span className="spacer">
                           <Button small onClick={() => toggleReviewed(key)}>
                             <IconCheck size={16} /> Mark reviewed
@@ -359,7 +431,7 @@ export function BillCheck() {
                 </Button>
               }
             />
-            <div style={{ margin: "0 -16px" }}>
+            <div className="bleed">
               {done.map((f) => {
                 const key = flagKey(f);
                 return (
@@ -409,14 +481,14 @@ export function BillCheck() {
                 { label: "Above it", swatch: "s2" },
               ]}
             />
-            <Fine>Tap a column to read what that category was billed.</Fine>
+            <Fine>Click a column to read what that category was billed.</Fine>
           </Stack>
         </Card>
       )}
 
       <Card flush>
-        <div style={{ padding: "14px 16px 2px" }}>
-          <Eyebrow>Billed against fair, by category</Eyebrow>
+        <div style={{ padding: "16px 18px 4px" }}>
+          <H2>Billed against fair, by category</H2>
         </div>
         {cats.map((c) => (
           <div key={c.key}>
@@ -451,9 +523,78 @@ export function BillCheck() {
         </Stack>
       </Card>
 
-      <Button wide onClick={copyScript}>
-        {copied ? "Script copied" : "Copy the call script"}
-      </Button>
+      <CharityCard eligibility={eligibility} owed={owed} hasCounty={county !== null} />
+
+      <Card>
+        <Stack tight>
+          <H2>The call script</H2>
+          <Fine>
+            What to say to the billing office, naming the findings on this bill
+            {eligibility ? " and asking for financial assistance" : ""}. Copy it and keep it in front of
+            you on the call.
+          </Fine>
+          <Button primary wide onClick={copyScript}>
+            {copied ? "Script copied" : "Copy the call script"}
+          </Button>
+        </Stack>
+      </Card>
     </Stack>
+  );
+}
+
+/**
+ * Charity care sits with the findings: the number that matters is what is left
+ * after both the disputes and the assistance.  ReliefReceipt has the full
+ * assessment and the application.
+ */
+function CharityCard({
+  eligibility,
+  owed,
+  hasCounty,
+}: {
+  eligibility: Eligibility | null;
+  owed: number;
+  hasCounty: boolean;
+}) {
+  const reliefUrl = useReliefUrl();
+  const e = eligibility;
+
+  return (
+    <Card>
+      <Stack tight>
+        <H2>Charity care</H2>
+        {!e ? (
+          <Note tone="info">
+            Add a household income {hasCounty ? "" : "and a ZIP code "}on the left to test this bill
+            against the state&apos;s financial assistance rules.
+          </Note>
+        ) : (
+          <>
+            <p className="charity-lead">
+              {e.headline} Ask for the {e.rule.programName}.
+            </p>
+            <Divider />
+            <StatRow two>
+              <Stat value={usd(owed)} label="Left after the disputes" />
+              <Stat value={usd(e.estimatedOwed)} label="Estimated to pay with assistance" />
+            </StatRow>
+            <Fine>
+              Free at or below {e.rule.freePct}% of the poverty level
+              {e.rule.discountPct > e.rule.freePct && `, discounted to ${e.rule.discountPct}%`}. This
+              household is at {Math.round(e.fplPct)}% of {usd(e.fpl)}. {e.rule.note}
+              {e.rule.assetNote ? ` ${e.rule.assetNote}` : ""}
+            </Fine>
+          </>
+        )}
+        <Fine>
+          Apply even if you think you earn too much: eligibility is judged per date of service, can be
+          applied retroactively, and hardship provisions sit outside the income test.{" "}
+          <a className="link" href={reliefUrl}>
+            ReliefReceipt
+          </a>{" "}
+          has the full assessment and the application.
+        </Fine>
+      </Stack>
+    </Card>
   );
 }

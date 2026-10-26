@@ -119,9 +119,9 @@ const badge: React.CSSProperties = {
   display: "grid",
   placeItems: "center",
   background: "var(--surface-2)",
-  color: "var(--rc-teal-bright)",
+  color: "var(--rc-navy-soft)",
   marginBottom: 6,
 };
 
 const tileLabel: React.CSSProperties = { fontWeight: 620, fontSize: 14.5 };
-const tileSub: React.CSSProperties = { fontSize: 12.5, color: "var(--ink-faint)" };
+const tileSub: React.CSSProperties = { fontSize: 13, color: "var(--ink-soft)" };
