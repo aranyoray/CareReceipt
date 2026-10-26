@@ -18,7 +18,7 @@ import {
 import { useDebounced, useStored, useStoredList } from "@/ui";
 import { readBillImage } from "@/lib/ocr";
 
-export type Tab = "bill" | "preventive";
+export type Tab = "bill" | "risk" | "help";
 
 export interface ScanState {
   busy: boolean;

@@ -3,16 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   type ExpectedValue,
-  type ExposureRow,
-  type Level,
   type RiskCell,
   type RiskDB,
-  LEVEL_LABEL,
   annualEquivalent,
-  exposomeFor,
   expectedValue,
   loadRiskDB,
-  nationalIndex,
   per100,
   profileKey,
   shortName,
@@ -21,8 +16,6 @@ import {
 } from "@/lib/engine";
 import {
   Button,
-  Card,
-  Divider,
   Empty,
   Fine,
   Hero,
@@ -30,10 +23,7 @@ import {
   Meter,
   MultiPicker,
   Note,
-  NumberField,
   Picker,
-  Rail,
-  Ring,
   Skeleton,
   Split,
   Stack,
@@ -44,20 +34,7 @@ import {
   usd,
   usdShort,
 } from "@/ui";
-import { useApp } from "./AppState";
 import { SlipHead, SlipSection, SlipStage, usePrinted } from "./Slip";
-
-/** The ring has no informational step, so a typical reading uses the series hue. */
-const ringTone = (t: "ok" | "info" | "warn" | "danger") => (t === "info" ? "s1" : t);
-
-const TONE: Record<Level, "ok" | "info" | "warn" | "danger"> = {
-  low: "ok",
-  below: "ok",
-  typical: "info",
-  elevated: "warn",
-  high: "danger",
-  severe: "danger",
-};
 
 interface Risk {
   id: string;
@@ -69,13 +46,10 @@ interface Risk {
 }
 
 /**
- * Population risk and the local exposure picture answer
- * halves of one question — what is likely to go wrong for someone like you,
- * and what living where you live adds on top — so they are one feature here,
- * with the dollar figure both of them produce reported per year.
+ * The population health-risk receipt: what is statistically most likely to
+ * affect someone with this profile, and what it is worth per year.
  */
 export function PreventiveCheck() {
-  const { zip, setZip, county } = useApp();
   const [db, setDb] = useState<RiskDB | null>(null);
   const [ageId, setAgeId] = useStored("pc_age", "35_44");
   const [raceId, setRaceId] = useStored("pc_race", "");
@@ -164,9 +138,6 @@ export function PreventiveCheck() {
   const carried = risks.filter((r) => r.diagnosed);
   const topPct = likely.length ? (likely[0].cell.pct ?? 1) : 1;
 
-  const exposome = county ? exposomeFor(county, ageId) : null;
-  const nationalIdx = nationalIndex();
-
   const conditionOptions = useMemo(() => {
     if (!db) return [];
     const ids = db.preexisting.length ? db.preexisting : db.receipt_conditions;
@@ -199,15 +170,15 @@ export function PreventiveCheck() {
     );
   }
 
-  const key = profile ? `${ageId}|${sexId}|${raceId}|${[...diagnosed].sort().join(",")}|${county?.fips ?? zip}` : null;
+  const key = profile ? `${ageId}|${sexId}|${raceId}|${[...diagnosed].sort().join(",")}` : null;
   const stale = printedKey !== null && key !== printedKey;
   const label = (list: { id: string; label: string }[], id: string) => list.find((g) => g.id === id)?.label ?? id;
 
   const controls = (
     <>
       <Lede>
-        What is statistically most likely to affect someone with your profile, what living in your
-        county adds on top, and what both are worth per year. Use it to decide what to get screened
+        What is statistically most likely to affect someone with your profile, and what it is
+        worth per year. Use it to decide what to get screened
         for, not as a diagnosis.
       </Lede>
       <section className="panel-sec">
@@ -227,16 +198,6 @@ export function PreventiveCheck() {
           onChange={setDiagnosed}
           placeholder="Nothing selected"
           hint="Anything selected is counted as certain rather than likely, and the other conditions are shown at their rate among people who have it."
-        />
-      </section>
-      <section className="panel-sec">
-        <NumberField
-          label="ZIP code"
-          value={zip}
-          onChange={setZip}
-          maxLength={5}
-          placeholder="e.g. 10001"
-          hint={county ? `${county.name}, ${county.stateName}` : "Adds the local exposure picture."}
         />
       </section>
       {!profileChosen ? (
@@ -263,10 +224,9 @@ export function PreventiveCheck() {
   const slip = profile ? (
     <>
       <SlipHead
-        title="Preventive check"
+        title="Health risk"
         lines={[
           `${label(db.age_groups, ageId)}, ${label(db.sex_groups, sexId).toLowerCase()}, ${label(db.race_groups, raceId)}.`,
-          county ? `Living in ${county.name}, ${county.stateName}.` : "No ZIP code, so no local exposure picture.",
           carried.length > 0 ? `Already diagnosed: ${carried.map((r) => shortName(r.id)).join(", ")}.` : null,
         ]}
       />
@@ -371,50 +331,6 @@ export function PreventiveCheck() {
         </SlipSection>
       )}
 
-      <SlipSection>
-        <h3 className="slip-h">
-          Where you live{exposome ? `: ${LEVEL_LABEL[exposome.worst.level].toLowerCase()}` : ""}
-        </h3>
-        {!exposome ? (
-          <p className="slip-note">Enter a ZIP code on the left and print again to add the local exposure picture.</p>
-        ) : (
-          <>
-            <div className="row" style={{ gap: 16, flexWrap: "nowrap" }}>
-              <Ring
-                pct={exposome.compositeIndex}
-                tone={ringTone(TONE[exposome.worst.level])}
-                center={exposome.compositeIndex.toFixed(0)}
-                label="Burden index"
-                size={62}
-              />
-              <div className="stack-s" style={{ minWidth: 0 }}>
-                <Stat
-                  value={`${exposome.compositeIndex >= nationalIdx ? "+" : ""}${(
-                    exposome.compositeIndex - nationalIdx
-                  ).toFixed(0)}`}
-                  label="Index points against the national median county"
-                />
-                <Stat value={usd(annualEquivalent(exposome.typical, exposome.years))} label="Attributable cost a year" />
-              </div>
-            </div>
-            <div className="stack-s" style={{ marginTop: 14 }}>
-              {exposome.rows.slice(0, 5).map((r: ExposureRow) => (
-                <Rail key={r.domain.id} tone={TONE[r.level]}>
-                  <div className="row" style={{ flexWrap: "nowrap" }}>
-                    <strong style={{ fontSize: 14.5 }}>{r.domain.label}</strong>
-                    <span className="spacer num" style={{ fontSize: 13.5 }}>
-                      {usd(annualEquivalent(r.typical, exposome.years))}/yr
-                    </span>
-                  </div>
-                  <p className="fine" style={{ marginTop: 2 }}>
-                    {r.readout}
-                  </p>
-                </Rail>
-              ))}
-            </div>
-          </>
-        )}
-      </SlipSection>
     </>
   ) : null;
 

@@ -3,12 +3,14 @@
 **Is this bill wrong?** Photograph or paste an itemised US hospital bill.
 CareReceipt prices every line against what the procedure actually costs where
 you live, says which lines are worth disputing, and writes the words to use on
-the phone.
+the phone. It also prices the population health risk for a profile, and works
+out what a household is owed under its state's charity-care rules, with the
+application letter written for it.
 
 ```
-app/          one route, the workspace and its two screens
-components/   BillCheck, PreventiveCheck, Scan, Slip, shared state
-lib/engine/   bill audit, risk, exposome, costs, geo, charity-care rules
+app/          one route, the workspace and its three screens
+components/   BillCheck, PreventiveCheck, FinancialHelp, Scan, Slip, shared state
+lib/engine/   bill audit, risk, costs, geo, charity-care rules
 lib/ocr.ts    reading a bill from a photograph
 ui/           design system: tokens, primitives, charts, icons, app shell
 public/       county geography, the ZIP crosswalk, the risk reference
@@ -26,8 +28,9 @@ npm run typecheck
 ## The interface
 
 A desktop workspace, light only. A navy bar runs the full width with the
-product name and the screens as tabs: Bill check, Preventive, and a link to
-Relief. There is no home screen and no bottom tab bar.
+product name and the screens as tabs: Bill check, Health risk and Financial
+help. CareReceipt stands alone and links to nothing outside itself. There is no
+home screen and no bottom tab bar.
 
 Each screen is split in two. On the left, a full-height panel of ordinary
 form controls (native dropdowns, a checkbox dropdown for several choices,
@@ -42,9 +45,19 @@ line by line as a white clinical slip, with billed against fair for every
 charge and the totals underneath; the findings, the charts, charity care and
 the call script follow beneath the slip.
 
-**Preventive.** Age, sex, race and the conditions already diagnosed, plus the
-ZIP code, on the left. Print puts the most likely conditions, what they cost a
-year, the per-condition breakdown and the local exposure picture on one slip.
+**Health risk.** Age, sex, race and the conditions already diagnosed on the
+left. Print puts the most likely conditions, what they cost a year and the
+per-condition breakdown on one slip. It is the population risk receipt only;
+there is no local exposure section.
+
+**Financial help.** ZIP code, household income, household size and the balance
+owed on the left. The ZIP code, income and household are the same values Bill
+check uses, and the balance is taken from the checked bill (what is left after
+the disputes) until it is typed over. Print puts the state's charity-care
+rules, where the household sits against the poverty level, the estimated
+balance after assistance and the application letter on one slip, with a button
+to copy the letter. The charity care card under Bill check stays, and opens
+this screen to write the letter.
 
 **The print.** Until something is printed the right side shows a navy clinic
 sleeve with the top edge of a slip showing above it. Print draws the slip up
@@ -83,7 +96,7 @@ hand rather than invented.
 Pages append rather than replace, because an itemised bill usually runs to
 several.
 
-## Preventive check
+## Health risk
 
 Age, sex and race are dropdowns and the conditions already diagnosed are one
 multi-select, which is what the screen used to spend half a phone display on as
@@ -124,7 +137,7 @@ unnecessary. CareReceipt's server HTML went from 6.9 KB to 17 KB.
   hydration errors on any screen.
 - Scanning end to end: a photographed statement read on the device, cleaned,
   parsed to 7 lines, and priced into findings.
-- Relief engine across income bands: $22k/hh3/NY → 80% FPL → written off;
+- Charity-care engine across income bands: $22k/hh3/NY → 80% FPL → written off;
   $48k → 175% → written off (NY's threshold is 200%); $140k → 511% → unlikely.
 - Call script generates at 21 lines.
 

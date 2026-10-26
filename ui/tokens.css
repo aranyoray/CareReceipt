@@ -581,3 +581,10 @@ a { color: inherit; text-decoration: none; }
 .dials { margin: 0; padding: 2px 0 0; flex-wrap: wrap; }
 .hero-v { font-size: 44px; }
 @media (max-width: 899px) { .slip-after { margin: 18px 12px 0; } }
+
+/* The application letter on the Financial help slip. */
+.letter-body {
+  margin: 14px 0; padding: 16px 18px; white-space: pre-wrap;
+  font-size: 14.5px; line-height: 1.6; color: var(--ink);
+  background: var(--surface-2, #f6f4ee); border: 1px solid var(--line, #e3e0d6); border-radius: 10px;
+}

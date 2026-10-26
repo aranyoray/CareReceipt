@@ -282,6 +282,7 @@ function Findings() {
     flagKey,
     owed,
     eligibility,
+    go,
   } = useApp();
   const [copied, setCopied] = useState(false);
 
@@ -522,7 +523,7 @@ function Findings() {
         </Stack>
       </Card>
 
-      <CharityCard eligibility={eligibility} owed={owed} hasCounty={county !== null} />
+      <CharityCard eligibility={eligibility} owed={owed} hasCounty={county !== null} onApply={() => go("help")} />
 
       <Card>
         <Stack tight>
@@ -543,17 +544,19 @@ function Findings() {
 
 /**
  * Charity care sits with the findings: the number that matters is what is left
- * after both the disputes and the assistance.
- * assessment and the application.
+ * after both the disputes and the assistance. Financial help carries the full
+ * assessment and the application letter.
  */
 function CharityCard({
   eligibility,
   owed,
   hasCounty,
+  onApply,
 }: {
   eligibility: Eligibility | null;
   owed: number;
   hasCounty: boolean;
+  onApply: () => void;
 }) {
   const e = eligibility;
 
@@ -582,6 +585,11 @@ function CharityCard({
               household is at {Math.round(e.fplPct)}% of {usd(e.fpl)}. {e.rule.note}
               {e.rule.assetNote ? ` ${e.rule.assetNote}` : ""}
             </Fine>
+            <div>
+              <Button small onClick={onApply}>
+                Write the application letter
+              </Button>
+            </div>
           </>
         )}
         <Fine>
