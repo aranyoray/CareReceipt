@@ -14,15 +14,12 @@ export const viewport: Viewport = {
   // The app bar runs under the status bar and the tab bar under the home
   // indicator, so the page has to own the safe areas.
   viewportFit: "cover",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#124045" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a2e33" },
-  ],
+  themeColor: "#124045",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="light">
       <body>{children}</body>
     </html>
   );

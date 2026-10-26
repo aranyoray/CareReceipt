@@ -9,7 +9,6 @@ import {
   IconRelief,
   IconShield,
   Segmented,
-  ThemeToggle,
 } from "@/ui";
 import { AppState, useApp } from "@/components/AppState";
 import { BillCheck } from "@/components/BillCheck";
@@ -50,7 +49,6 @@ function Chrome() {
             }
           : undefined
       }
-      right={<ThemeToggle />}
       lifted={tab === "home"}
       narrow={tab !== "preventive"}
       header={
