@@ -3,14 +3,15 @@
 **Is this bill wrong?** Photograph or paste an itemised US hospital bill.
 CareReceipt prices every line against what the procedure actually costs where
 you live, says which lines are worth disputing, and writes the words to use on
-the phone. It also prices the population health risk for a profile, and works
-out what a household is owed under its state's charity-care rules, with the
-application letter written for it.
+the phone. It also prices the population health risk for a profile, works out what a
+household is owed under its state's charity-care rules with the application
+letter written for it, and lists the billing protections that apply to the bill
+with the deadline on each one and the letter that goes with it.
 
 ```
-app/          one route, the workspace and its three screens
-components/   BillCheck, PreventiveCheck, FinancialHelp, Scan, Slip, shared state
-lib/engine/   bill audit, risk, costs, geo, charity-care rules
+app/          one route, the workspace and its four screens
+components/   BillCheck, PreventiveCheck, FinancialHelp, RightsCheck, Scan, Slip, shared state
+lib/engine/   bill audit, risk, costs, geo, charity-care rules, rights and deadlines
 lib/ocr.ts    reading a bill from a photograph
 ui/           design system: tokens, primitives, charts, icons, app shell
 public/       county geography, the ZIP crosswalk, the risk reference
@@ -28,8 +29,8 @@ npm run typecheck
 ## The interface
 
 A desktop workspace, light only. A navy bar runs the full width with the
-product name and the screens as tabs: Bill check, Health risk and Financial
-help. CareReceipt stands alone and links to nothing outside itself. There is no
+product name and the screens as tabs: Bill check, Health risk, Financial help
+and Rights & deadlines. CareReceipt stands alone and links to nothing outside itself. There is no
 home screen and no bottom tab bar.
 
 Each screen is split in two. On the left, a full-height panel of ordinary
@@ -58,6 +59,34 @@ rules, where the household sits against the poverty level, the estimated
 balance after assistance and the application letter on one slip, with a button
 to copy the letter. The charity care card under Bill check stays, and opens
 this screen to write the letter.
+
+**Rights & deadlines.** ZIP code (shared), how the care was paid for, whether
+the hospital is a nonprofit, the date of the first bill, whether an itemized bill
+has arrived and whether anyone has started collecting. Uninsured patients add the
+good faith estimate and that provider's bill, which is taken from the checked
+bill until it is typed over; insured patients add the date on any denial notice.
+Print puts the next deadline, a dated timeline with today on it, each protection
+that applies with its status, and the letters on one slip. The rules live in
+`lib/engine/rights.ts`, every deadline counted in calendar days from the dates
+entered:
+
+- Texas Health and Safety Code chapter 185 (SB 490, 2023, amended by HB 216,
+  2025): a provider asking for payment must send a written itemized bill and may
+  not pursue debt collection until it has. Drafts the request, and the demand to
+  stop collecting when collection has already started.
+- No Surprises Act patient-provider dispute resolution: uninsured or self-pay,
+  a bill at least $400 above that provider's good faith estimate, 120 days from
+  the bill, $25 fee, no collections while the dispute is open.
+- IRS 501(r) for nonprofit hospitals: applications accepted for at least 240
+  days after the first post-discharge bill, no extraordinary collection actions
+  before day 120 or without 30 days' written notice, and none while an
+  application is pending.
+- Internal appeals: at least 180 days from a denial notice for most employer and
+  marketplace plans, with Medicare and Medicaid flagged as shorter.
+- A surprise-billing flag from the bill check adds the No Surprises Act balance
+  billing protection for insured patients.
+
+It is general information about the rules, not legal advice, and the slip says so.
 
 **The print.** Until something is printed the right side shows a navy clinic
 sleeve with the top edge of a slip showing above it. Print draws the slip up
@@ -140,6 +169,13 @@ unnecessary. CareReceipt's server HTML went from 6.9 KB to 17 KB.
 - Charity-care engine across income bands: $22k/hh3/NY → 80% FPL → written off;
   $48k → 175% → written off (NY's threshold is 200%); $140k → 511% → unlikely.
 - Call script generates at 21 lines.
+- Rights engine on fixed dates: a first bill on 1 September 2026 gives the
+  federal dispute deadline and the earliest extraordinary collection on 30
+  December 2026 and the financial assistance window to 29 April 2027; a denial
+  on 1 October 2026 gives an appeal deadline of 30 March 2027; a bill $300 over
+  its estimate is ruled out of the dispute process; a first-bill date in the
+  future is ignored. Rights & deadlines screenshotted at 390px and 1440px with
+  no console errors.
 
 ## Notes
 
